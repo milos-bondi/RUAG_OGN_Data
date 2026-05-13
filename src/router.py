@@ -8,12 +8,14 @@ from fastapi.staticfiles import StaticFiles
 from src.envs import env
 from src.db.session import create_tables
 from src.cron.collector import CollectorService
+from src.cron.processor import ProcessorService
 from src.routes.api import router as api_router
 from src.routes.health import router as health_router
 from src.routes.dashboard import router as dashboard_router
 
 
 collector = CollectorService()
+processor = ProcessorService()
 
 
 @asynccontextmanager
@@ -24,9 +26,13 @@ async def lifespan(_app: FastAPI):
     # The single `uv run fastapi` command starts both the API and the collector.
     if env.collect_on_startup:
         collector.start()
+    if env.process_on_startup:
+        processor.start()
 
     yield
 
+    if env.process_on_startup:
+        processor.stop()
     if env.collect_on_startup:
         collector.stop()
 

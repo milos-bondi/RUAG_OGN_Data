@@ -5,68 +5,328 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>RUAG OGN Dashboard</title>
   <style>
-    :root { color-scheme: light; font-family: Inter, Arial, sans-serif; }
-    body { margin: 0; background: #f6f7f9; color: #17202a; }
-    header { padding: 20px 28px; background: #ffffff; border-bottom: 1px solid #d9dee7; }
-    main { padding: 24px 28px; display: grid; gap: 18px; }
-    h1 { margin: 0; font-size: 24px; letter-spacing: 0; }
-    h2 { margin: 0 0 12px; font-size: 16px; letter-spacing: 0; }
-    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; }
-    .card { background: #ffffff; border: 1px solid #d9dee7; border-radius: 8px; padding: 16px; }
-    .metric { font-size: 30px; font-weight: 700; }
-    table { width: 100%; border-collapse: collapse; font-size: 13px; }
-    th, td { padding: 8px 6px; border-bottom: 1px solid #e5e9f0; text-align: left; }
-    th { color: #526171; font-weight: 600; }
-    #map { height: 480px; position: relative; overflow: hidden; background: #dce7ed; }
-    .dot { position: absolute; width: 5px; height: 5px; border-radius: 50%; background: #145c9e; opacity: .7; }
+    :root {
+      color-scheme: light;
+      --ink: #17202a;
+      --muted: #667487;
+      --line: #d8dee8;
+      --paper: #ffffff;
+      --field: #f3f6f8;
+      --blue: #145c9e;
+      --teal: #16817a;
+      --red: #b8422c;
+      --amber: #c07b21;
+      font-family: "Aptos", "Segoe UI", sans-serif;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #eef2f4; color: var(--ink); }
+    header {
+      display: flex;
+      align-items: end;
+      justify-content: space-between;
+      gap: 18px;
+      padding: 18px 24px;
+      background: var(--paper);
+      border-bottom: 1px solid var(--line);
+    }
+    h1 { margin: 0; font-size: 25px; font-weight: 720; letter-spacing: 0; }
+    h2 { margin: 0 0 10px; font-size: 15px; font-weight: 700; letter-spacing: 0; }
+    h3 { margin: 0; font-size: 13px; font-weight: 700; letter-spacing: 0; }
+    button, select {
+      height: 34px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: var(--paper);
+      color: var(--ink);
+      font: inherit;
+      padding: 0 10px;
+    }
+    button { cursor: pointer; }
+    main { display: grid; gap: 14px; padding: 16px; }
+    .toolbar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; color: var(--muted); font-size: 13px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; }
+    .workbench { display: grid; grid-template-columns: minmax(0, 1.45fr) minmax(320px, .85fr); gap: 14px; }
+    .stack { display: grid; gap: 14px; }
+    .card {
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 14px;
+      min-width: 0;
+    }
+    .metric { font-size: 28px; font-weight: 760; line-height: 1.1; }
+    .label { color: var(--muted); font-size: 12px; margin-top: 4px; }
+    .map {
+      position: relative;
+      height: 560px;
+      overflow: hidden;
+      background:
+        linear-gradient(90deg, rgba(20,92,158,.09) 1px, transparent 1px),
+        linear-gradient(0deg, rgba(20,92,158,.09) 1px, transparent 1px),
+        linear-gradient(135deg, #e8f1ef, #dfe9ee 58%, #edf2f0);
+      background-size: 8.333% 8.333%, 8.333% 8.333%, auto;
+    }
+    .map::after {
+      content: "Switzerland bbox";
+      position: absolute;
+      right: 12px;
+      bottom: 10px;
+      color: #73808f;
+      font-size: 12px;
+    }
+    .density-cell, .gap-cell, .track-point {
+      position: absolute;
+      transform: translate(-50%, -50%);
+      border-radius: 999px;
+      pointer-events: auto;
+    }
+    .density-cell { background: rgba(20, 92, 158, .46); border: 1px solid rgba(20, 92, 158, .7); }
+    .gap-cell { background: rgba(184, 66, 44, .52); border: 1px solid rgba(184, 66, 44, .85); }
+    .track-point { width: 6px; height: 6px; background: var(--teal); border: 1px solid #fff; }
+    .track-line {
+      position: absolute;
+      height: 2px;
+      transform-origin: left center;
+      background: rgba(22, 129, 122, .72);
+      pointer-events: none;
+    }
+    table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    th, td { padding: 7px 6px; border-bottom: 1px solid #e7ebf0; text-align: left; vertical-align: top; }
+    th { color: var(--muted); font-weight: 700; }
+    tr[data-segment-id] { cursor: pointer; }
+    tr[data-segment-id]:hover { background: var(--field); }
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      min-height: 21px;
+      padding: 2px 7px;
+      border-radius: 999px;
+      background: var(--field);
+      color: var(--muted);
+      font-size: 12px;
+    }
+    .split { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    .bar { display: grid; grid-template-columns: minmax(110px, .8fr) 1fr 58px; gap: 8px; align-items: center; font-size: 12px; }
+    .bar span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .bar-track { height: 9px; background: #e7ebf0; border-radius: 999px; overflow: hidden; }
+    .bar-fill { height: 100%; background: var(--blue); border-radius: inherit; }
+    .empty { color: var(--muted); font-size: 13px; padding: 16px 0; }
+    @media (max-width: 980px) {
+      header { align-items: start; flex-direction: column; }
+      .workbench, .split { grid-template-columns: 1fr; }
+      .map { height: 440px; }
+    }
   </style>
 </head>
 <body>
-  <header><h1>RUAG OGN Dashboard</h1></header>
+  <header>
+    <div>
+      <h1>RUAG OGN Dashboard</h1>
+      <div class="label" id="timeRange">Waiting for processed observations</div>
+    </div>
+    <div class="toolbar">
+      <select id="mapMode" aria-label="Map layer">
+        <option value="density">Density</option>
+        <option value="gaps">Coverage gaps</option>
+        <option value="track">Selected track</option>
+      </select>
+      <button id="refreshButton" type="button">Refresh</button>
+      <span id="status">Idle</span>
+    </div>
+  </header>
+
   <main>
     <section class="grid">
-      <div class="card"><h2>Raw Messages</h2><div id="raw" class="metric">...</div></div>
-      <div class="card"><h2>Position Observations</h2><div id="positions" class="metric">...</div></div>
+      <div class="card"><h2>Raw Messages</h2><div id="raw" class="metric">0</div><div class="label">Source APRS messages</div></div>
+      <div class="card"><h2>Positions</h2><div id="positions" class="metric">0</div><div class="label">Parsed position rows</div></div>
+      <div class="card"><h2>Cleaned</h2><div id="cleaned" class="metric">0</div><div class="label">Quality-filtered Swiss rows</div></div>
+      <div class="card"><h2>Segments</h2><div id="segments" class="metric">0</div><div class="label">Processed tracks</div></div>
+      <div class="card"><h2>Aircraft</h2><div id="aircraftCount" class="metric">0</div><div class="label">Unique cleaned IDs</div></div>
     </section>
-    <section class="card">
-      <h2>Recent Observation Map</h2>
-      <div id="map"></div>
+
+    <section class="workbench">
+      <div class="card">
+        <h2>Geographic View</h2>
+        <div id="map" class="map"></div>
+      </div>
+      <div class="stack">
+        <div class="card">
+          <h2>Coverage Dropout Proxy</h2>
+          <table id="gaps"></table>
+        </div>
+        <div class="card">
+          <h2>Top Track Segments</h2>
+          <table id="segmentTable"></table>
+        </div>
+      </div>
     </section>
-    <section class="grid">
-      <div class="card"><h2>Top Aircraft</h2><table id="aircraft"></table></div>
-      <div class="card"><h2>Beacon Types</h2><table id="beacons"></table></div>
+
+    <section class="split">
+      <div class="card">
+        <h2>Aircraft Types</h2>
+        <div id="typeBars"></div>
+      </div>
+      <div class="card">
+        <h2>Top Aircraft</h2>
+        <table id="aircraft"></table>
+      </div>
     </section>
   </main>
+
   <script>
+    const bbox = { minLat: 45.75, maxLat: 47.85, minLon: 5.85, maxLon: 10.65 };
+    const state = { density: [], gaps: [], segments: [], selectedSegment: null, selectedPoints: [] };
+
+    function $(id) { return document.getElementById(id); }
+    function fmt(value) { return Number(value || 0).toLocaleString(); }
     function cell(value) { return `<td>${value ?? ""}</td>`; }
+    function project(lat, lon) {
+      return {
+        x: ((lon - bbox.minLon) / (bbox.maxLon - bbox.minLon)) * 100,
+        y: ((bbox.maxLat - lat) / (bbox.maxLat - bbox.minLat)) * 100
+      };
+    }
     function rows(items, keys) {
       return items.map(item => `<tr>${keys.map(key => cell(item[key])).join("")}</tr>`).join("");
     }
-    async function refresh() {
-      const [counts, observations, aircraft, beacons] = await Promise.all([
-        fetch("/api/counts").then(r => r.json()),
-        fetch("/api/observations?limit=400").then(r => r.json()),
-        fetch("/api/aircraft").then(r => r.json()),
-        fetch("/api/beacons").then(r => r.json())
-      ]);
-      document.getElementById("raw").textContent = counts.raw_messages.toLocaleString();
-      document.getElementById("positions").textContent = counts.position_observations.toLocaleString();
-      document.getElementById("aircraft").innerHTML =
-        "<tr><th>Aircraft</th><th>Observations</th></tr>" + rows(aircraft, ["aircraft_id", "observations"]);
-      document.getElementById("beacons").innerHTML =
-        "<tr><th>Beacon</th><th>Observations</th></tr>" + rows(beacons, ["beacon_type", "observations"]);
-      const map = document.getElementById("map");
-      map.innerHTML = "";
-      observations.forEach(item => {
-        if (item.latitude === null || item.longitude === null) return;
+    function layerTitle() {
+      return { density: "Density", gaps: "Coverage gaps", track: "Selected track" }[$("mapMode").value];
+    }
+    function place(el, lat, lon) {
+      const point = project(lat, lon);
+      el.style.left = `${point.x}%`;
+      el.style.top = `${point.y}%`;
+    }
+    function clearMap() {
+      $("map").innerHTML = "";
+    }
+    function renderDensity() {
+      clearMap();
+      const maxObs = Math.max(1, ...state.density.map(item => item.observations));
+      state.density.forEach(item => {
         const dot = document.createElement("div");
-        dot.className = "dot";
-        dot.title = `${item.aircraft_id || "unknown"} ${item.timestamp || ""}`;
-        dot.style.left = `${((item.longitude + 180) / 360) * 100}%`;
-        dot.style.top = `${((90 - item.latitude) / 180) * 100}%`;
-        map.appendChild(dot);
+        dot.className = "density-cell";
+        const size = 7 + Math.sqrt(item.observations / maxObs) * 36;
+        dot.style.width = `${size}px`;
+        dot.style.height = `${size}px`;
+        dot.title = `${item.aircraft_type_name}: ${fmt(item.observations)} obs, ${fmt(item.unique_aircraft)} aircraft`;
+        place(dot, item.lat, item.lon);
+        $("map").appendChild(dot);
       });
     }
+    function renderGaps() {
+      clearMap();
+      const maxDropouts = Math.max(1, ...state.gaps.map(item => item.dropouts));
+      state.gaps.forEach(item => {
+        const dot = document.createElement("div");
+        dot.className = "gap-cell";
+        const size = 9 + Math.sqrt(item.dropouts / maxDropouts) * 42;
+        dot.style.width = `${size}px`;
+        dot.style.height = `${size}px`;
+        dot.title = `${fmt(item.dropouts)} dropouts, ${(item.dropout_rate * 100).toFixed(1)}%, max gap ${item.max_gap_s}s`;
+        place(dot, item.lat, item.lon);
+        $("map").appendChild(dot);
+      });
+    }
+    function renderTrack() {
+      clearMap();
+      const points = state.selectedPoints;
+      points.forEach((item, index) => {
+        const dot = document.createElement("div");
+        dot.className = "track-point";
+        dot.title = `${item.timestamp} ${item.altitude_m ?? ""}m`;
+        place(dot, item.latitude, item.longitude);
+        $("map").appendChild(dot);
+        if (index === 0) return;
+        const prev = project(points[index - 1].latitude, points[index - 1].longitude);
+        const curr = project(item.latitude, item.longitude);
+        const line = document.createElement("div");
+        const dx = curr.x - prev.x;
+        const dy = curr.y - prev.y;
+        line.className = "track-line";
+        line.style.left = `${prev.x}%`;
+        line.style.top = `${prev.y}%`;
+        line.style.width = `${Math.sqrt(dx * dx + dy * dy)}%`;
+        line.style.transform = `rotate(${Math.atan2(dy, dx)}rad)`;
+        $("map").appendChild(line);
+      });
+    }
+    function renderMap() {
+      const mode = $("mapMode").value;
+      $("status").textContent = layerTitle();
+      if (mode === "density") renderDensity();
+      if (mode === "gaps") renderGaps();
+      if (mode === "track") renderTrack();
+    }
+    function renderBars(items) {
+      const maxObs = Math.max(1, ...items.map(item => item.observations));
+      $("typeBars").innerHTML = items.map(item => `
+        <div class="bar">
+          <span title="${item.label}">${item.label}</span>
+          <div class="bar-track"><div class="bar-fill" style="width:${(item.observations / maxObs) * 100}%"></div></div>
+          <strong>${fmt(item.observations)}</strong>
+        </div>
+      `).join("") || `<div class="empty">No cleaned observations yet.</div>`;
+    }
+    async function selectSegment(segmentId) {
+      state.selectedSegment = segmentId;
+      state.selectedPoints = await fetch(`/api/segments/${segmentId}/points`).then(r => r.json());
+      $("mapMode").value = "track";
+      renderMap();
+    }
+    function renderSegments(items) {
+      $("segmentTable").innerHTML =
+        "<tr><th>ID</th><th>Aircraft</th><th>Points</th><th>Km</th><th>Type</th></tr>" +
+        items.map(item => `
+          <tr data-segment-id="${item.id}">
+            ${cell(item.id)}${cell(item.aircraft_id)}${cell(fmt(item.n_points))}
+            ${cell(item.distance_km.toFixed(1))}${cell(`<span class="pill">${item.aircraft_type_name}</span>`)}
+          </tr>
+        `).join("");
+      document.querySelectorAll("tr[data-segment-id]").forEach(row => {
+        row.addEventListener("click", () => selectSegment(row.dataset.segmentId));
+      });
+    }
+    function renderGapsTable(items) {
+      $("gaps").innerHTML =
+        "<tr><th>Cell</th><th>Dropouts</th><th>Rate</th><th>Max gap</th></tr>" +
+        items.slice(0, 10).map(item => `
+          <tr>${cell(`${item.lat.toFixed(2)}, ${item.lon.toFixed(2)}`)}
+          ${cell(fmt(item.dropouts))}${cell(`${(item.dropout_rate * 100).toFixed(1)}%`)}
+          ${cell(`${item.max_gap_s}s`)}</tr>
+        `).join("");
+    }
+    async function refresh() {
+      $("status").textContent = "Loading";
+      const [counts, quality, density, gaps, segments, aircraft, types] = await Promise.all([
+        fetch("/api/counts").then(r => r.json()),
+        fetch("/api/quality").then(r => r.json()),
+        fetch("/api/density?limit=700").then(r => r.json()),
+        fetch("/api/coverage-gaps?limit=250").then(r => r.json()),
+        fetch("/api/segments?limit=25").then(r => r.json()),
+        fetch("/api/aircraft").then(r => r.json()),
+        fetch("/api/aircraft-types").then(r => r.json())
+      ]);
+      state.density = density;
+      state.gaps = gaps;
+      state.segments = segments;
+      $("raw").textContent = fmt(counts.raw_messages);
+      $("positions").textContent = fmt(counts.position_observations);
+      $("cleaned").textContent = fmt(counts.cleaned_observations);
+      $("segments").textContent = fmt(counts.track_segments);
+      $("aircraftCount").textContent = fmt(quality.unique_aircraft);
+      $("timeRange").textContent = quality.first_timestamp
+        ? `${quality.first_timestamp} to ${quality.last_timestamp}`
+        : "Waiting for processed observations";
+      $("aircraft").innerHTML =
+        "<tr><th>Aircraft</th><th>Observations</th></tr>" + rows(aircraft, ["aircraft_id", "observations"]);
+      renderBars(types);
+      renderSegments(segments);
+      renderGapsTable(gaps);
+      renderMap();
+    }
+    $("refreshButton").addEventListener("click", refresh);
+    $("mapMode").addEventListener("change", renderMap);
     refresh();
     setInterval(refresh, 30000);
   </script>

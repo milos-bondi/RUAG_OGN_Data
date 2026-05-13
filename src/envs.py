@@ -20,6 +20,14 @@ class Settings(BaseSettings):
     max_speed_kmh: float = 300.0
     api_observation_limit: int = 500
     collect_on_startup: bool = True
+    process_on_startup: bool = True
+    processor_interval_seconds: float = 15.0
+    processor_batch_size: int = 5000
+    segment_gap_seconds: float = 60.0
+    max_jump_speed_kmh: float = 1200.0
+    include_outside_swiss: bool = False
+    include_receivers: bool = False
+    include_static: bool = False
     host: str = "127.0.0.1"
     port: int = 8000
 

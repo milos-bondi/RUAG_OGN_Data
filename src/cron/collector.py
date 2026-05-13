@@ -25,7 +25,9 @@ def build_client_settings() -> SimpleNamespace:
     return SimpleNamespace(
         APRS_SERVER_HOST=env.aprs_server_host,
         APRS_SERVER_PORT_FULL_FEED=client_settings.APRS_SERVER_PORT_FULL_FEED,
-        APRS_SERVER_PORT_CLIENT_DEFINED_FILTERS=client_settings.APRS_SERVER_PORT_CLIENT_DEFINED_FILTERS,
+        APRS_SERVER_PORT_CLIENT_DEFINED_FILTERS=(
+            client_settings.APRS_SERVER_PORT_CLIENT_DEFINED_FILTERS
+        ),
         APRS_APP_NAME=client_settings.APRS_APP_NAME,
         APRS_APP_VER=client_settings.APRS_APP_VER,
         APRS_KEEPALIVE_TIME=client_settings.APRS_KEEPALIVE_TIME,
@@ -65,7 +67,12 @@ def is_likely_unconventional(beacon: dict) -> bool:
     return True
 
 
-def store_raw_message(session: Session, raw_message: str, status: str, error: str | None) -> RawMessage:
+def store_raw_message(
+    session: Session,
+    raw_message: str,
+    status: str,
+    error: str | None,
+) -> RawMessage:
     """Store one raw APRS message."""
     row = RawMessage(
         received_at=utc_now_iso(),
