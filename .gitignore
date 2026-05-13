@@ -1,0 +1,59 @@
+# OGN data and generated local outputs
+.DS_Store
+*.db
+*.db-shm
+*.db-wal
+*.log
+*.pid
+trajectory_*.html
+trajectory_data.json
+data/**/*.db
+data/**/*.db-shm
+data/**/*.db-wal
+data/live/*.html
+data/live/*.json
+data/live/*.md
+data/live/*.pid
+data/quality/
+data/visualizations/
+outputs/
+
+# Python
+__pycache__/
+*.py[cod]
+
+# Distribution / packaging
+bin/
+build/
+develop-eggs/
+dist/
+eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Unit test / coverage reports
+.coverage
+.cache
+nosetests.xml
+coverage.xml
+
+# Sphinx documentation
+docs/_build/
+
+# Editors
+*.swp
+*.swo
+
+# Python virtualenv
+env/
+.venv/
+support_files/env/
+
+# Celery beat
+celerybeat-schedule
