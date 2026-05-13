@@ -19,6 +19,9 @@ class Settings(BaseSettings):
     max_altitude_m: float = 6000.0
     max_speed_kmh: float = 300.0
     api_observation_limit: int = 500
+    collect_on_startup: bool = True
+    host: str = "127.0.0.1"
+    port: int = 8000
 
 
 env = Settings()

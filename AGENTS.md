@@ -2,10 +2,12 @@
 
 You are working on a data collection and visualization for Open Glider Network. The goal is to create a simple html dashboard to visualize the data and a data collection job and keeps collecting new data
 
-- Use `ogn-client` version 1.3.2 to collect the data. 
+- Use `ogn-client` to collect the data. 
 - Use `sqlalchemy` for the python ORM, no migrations are needed.
 - Use `fastapi` for the api.
 - Use `pydantic-settings` to load enviroments, create a `env = Settings()` object
+- Use `uv` to manage the python enviroment.
+- A single `uv run fastapi` that run both the api and the cron.
 
 # Architecture
 
@@ -23,6 +25,7 @@ repository/
 │   ├── dtypes/         # Pydantic schemas and API data types
 │   ├── routes/         # API route handlers
 │   ├── utils/          # Shared utilities  
+│   ├── static/         # Static files (html pages, ecc.)
 │   ├── .env.sample     # Development enviroments variables
 │   └── pyproject.toml
 │
@@ -44,3 +47,4 @@ repository/
 - Create a function when it gives you a meaningful abstraction boundary. Do not create one just to “split code”.
 - Keep improving and cleanup the repository so that it follows the described architecture
 - Cleanup any .md file that is not strictly needed, keep the `AGENTS.md` and the `README.md only
+- Make sure to include in the `README.md` all the instructions on how to run the server.

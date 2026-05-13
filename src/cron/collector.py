@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import threading
 from types import SimpleNamespace
 
 from ogn.client import AprsClient
@@ -134,32 +135,66 @@ def handle_message(session: Session, counters: dict[str, int], raw_message: str)
         )
 
 
-def run_collector() -> None:
-    """Run the live OGN collector until interrupted."""
-    create_tables()
-    session = SessionLocal()
-    counters = {"seen": 0, "saved": 0, "positions": 0, "filtered": 0, "errors": 0}
-    client = AprsClient(
-        aprs_user=env.aprs_user,
-        aprs_filter=env.aprs_filter,
-        settings=build_client_settings(),
-    )
+class CollectorService:
+    """Own the live collector client and optional background thread."""
 
-    try:
-        print(
-            f"Listening to {env.aprs_server_host} with filter {env.aprs_filter}. "
-            f"Writing to {env.database_url}.",
-            flush=True,
+    def __init__(self) -> None:
+        """Initialize collector runtime state."""
+        self.client: AprsClient | None = None
+        self.thread: threading.Thread | None = None
+
+    def start(self) -> None:
+        """Start the collector in a background thread."""
+        if self.thread and self.thread.is_alive():
+            return
+
+        self.thread = threading.Thread(target=self.run, daemon=True)
+        self.thread.start()
+
+    def run(self) -> None:
+        """Run the live OGN collector until stopped."""
+        create_tables()
+        session = SessionLocal()
+        counters = {"seen": 0, "saved": 0, "positions": 0, "filtered": 0, "errors": 0}
+        self.client = AprsClient(
+            aprs_user=env.aprs_user,
+            aprs_filter=env.aprs_filter,
+            settings=build_client_settings(),
         )
-        client.connect(retries=100, wait_period=15)
-        client.run(callback=lambda raw_message: handle_message(session, counters, raw_message), autoreconnect=True)
-    except KeyboardInterrupt:
-        print("Stopping collector.", flush=True)
-    finally:
-        session.commit()
-        session.close()
-        if getattr(client, "sock", None):
-            client.disconnect()
+
+        try:
+            print(
+                f"Listening to {env.aprs_server_host} with filter {env.aprs_filter}. "
+                f"Writing to {env.database_url}.",
+                flush=True,
+            )
+            self.client.connect(retries=100, wait_period=15)
+
+            # The ogn-client loop owns socket reads; this callback persists each message.
+            self.client.run(
+                callback=lambda raw_message: handle_message(session, counters, raw_message),
+                autoreconnect=True,
+            )
+        except KeyboardInterrupt:
+            print("Stopping collector.", flush=True)
+        finally:
+            session.commit()
+            session.close()
+            if self.client and getattr(self.client, "sock", None):
+                self.client.disconnect()
+
+    def stop(self) -> None:
+        """Stop the collector client and wait briefly for the thread."""
+        if self.client and getattr(self.client, "sock", None):
+            self.client.disconnect()
+
+        if self.thread and self.thread.is_alive():
+            self.thread.join(timeout=5)
+
+
+def run_collector() -> None:
+    """Run the live OGN collector in the foreground."""
+    CollectorService().run()
 
 
 if __name__ == "__main__":

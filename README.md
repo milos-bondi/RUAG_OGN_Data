@@ -14,6 +14,7 @@ and viewing the latest observations in a simple HTML dashboard.
 │   ├── db/
 │   ├── dtypes/
 │   ├── routes/
+│   ├── static/
 │   ├── utils/
 │   ├── .env.sample
 │   └── pyproject.toml
@@ -24,21 +25,73 @@ and viewing the latest observations in a simple HTML dashboard.
 
 Local collected data stays under `data/` and is ignored by Git.
 
-## Setup
+## Install
 
-The local virtual environment is currently at `support_files/env`.
+This project is intended to be run with `uv`.
 
-```bash
-support_files/env/bin/python -m pip install .
-```
-
-The required OGN client package is pinned to `ogn-client==1.3.2`.
-
-## Run The API And Dashboard
+Install dependencies:
 
 ```bash
-support_files/env/bin/python -m uvicorn src.router:app --reload
+uv sync
 ```
+
+Confirm the OGN client package:
+
+```bash
+uv run python -m pip show ogn-client
+```
+
+The project currently pins:
+
+```text
+ogn-client==1.3.2
+```
+
+## Configure
+
+Copy the sample environment file when local overrides are needed:
+
+```bash
+cp src/.env.sample src/.env
+```
+
+Default database:
+
+```text
+data/live/ogn_live.db
+```
+
+Important settings:
+
+```text
+OGN_DATABASE_URL=sqlite:///data/live/ogn_live.db
+OGN_APRS_USER=N0CALL
+OGN_APRS_FILTER=r/46.8/8.2/250
+OGN_APRS_SERVER_HOST=aprs.glidernet.org
+OGN_COLLECT_ON_STARTUP=true
+OGN_HOST=127.0.0.1
+OGN_PORT=8000
+```
+
+## Run Server And Collector
+
+Start the API, dashboard, and live collector with one command:
+
+```bash
+uv run fastapi
+```
+
+This command starts the FastAPI server and starts the OGN collection job during
+application startup. New raw messages are appended to `raw_messages`; parsed
+positions are appended to `position_observations`.
+
+Stop everything with:
+
+```text
+Ctrl+C
+```
+
+## Open Dashboard
 
 Open:
 
@@ -46,27 +99,57 @@ Open:
 http://127.0.0.1:8000/
 ```
 
-Useful API routes:
+The dashboard HTML lives in:
 
 ```text
-/health
-/api/counts
-/api/observations
-/api/aircraft
-/api/beacons
+src/static/index.html
 ```
 
-## Run The Collector
+The browser fetches fresh data from the API every 30 seconds.
+
+## API Routes
+
+Health:
 
 ```bash
-support_files/env/bin/python -m src.cron.collector
+curl -s http://127.0.0.1:8000/health
 ```
 
-Configuration is loaded with `pydantic-settings` from environment variables.
-Copy `src/.env.sample` to `src/.env` when local overrides are needed.
+Database counts:
 
-Default database:
+```bash
+curl -s http://127.0.0.1:8000/api/counts
+```
 
-```text
-data/live/ogn_live.db
+Recent observations:
+
+```bash
+curl -s 'http://127.0.0.1:8000/api/observations?limit=10'
+```
+
+Top aircraft:
+
+```bash
+curl -s http://127.0.0.1:8000/api/aircraft
+```
+
+Beacon counts:
+
+```bash
+curl -s http://127.0.0.1:8000/api/beacons
+```
+
+## Disable Collection Temporarily
+
+To run only the API and dashboard without starting the collector:
+
+```bash
+OGN_COLLECT_ON_STARTUP=false uv run fastapi
+```
+
+## Direct Database Check
+
+```bash
+sqlite3 data/live/ogn_live.db \
+  "select 'raw_messages', count(*) from raw_messages union all select 'position_observations', count(*) from position_observations;"
 ```
