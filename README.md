@@ -45,8 +45,13 @@ uv run python -m pip show ogn-client
 The project currently pins:
 
 ```text
+fastapi>=0.100.0,<0.111.0
 ogn-client==1.3.2
 ```
+
+FastAPI is pinned below the FastAPI CLI package range so the repository's own
+`uv run fastapi` entrypoint starts this application instead of the external
+FastAPI CLI.
 
 ## Configure
 

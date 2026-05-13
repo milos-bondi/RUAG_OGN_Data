@@ -48,3 +48,4 @@ repository/
 - Keep improving and cleanup the repository so that it follows the described architecture
 - Cleanup any .md file that is not strictly needed, keep the `AGENTS.md` and the `README.md only
 - Make sure to include in the `README.md` all the instructions on how to run the server.
+- Make sure that the repository is self-contained and portable
