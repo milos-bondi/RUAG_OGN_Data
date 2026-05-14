@@ -145,7 +145,10 @@ The dashboard is refreshed in the background and `/` serves the cached HTML, so
 opening the page does not recompute the full database snapshot. The page also
 auto-refreshes every `OGN_DASHBOARD_REFRESH_SECONDS`. All-time status totals are
 shown in the side panel, while the interactive map/dropout layers use the recent
-`OGN_DASHBOARD_WINDOW_HOURS` window for faster demo interaction.
+`OGN_DASHBOARD_WINDOW_HOURS` window for faster demo interaction. The dashboard
+also includes a separate all-time dropout grid overlay and table, recomputed on
+each dashboard refresh, to show where signal loss has accumulated since data
+collection began.
 
 It shows raw and processed counts, Swiss density cells with browser-side
 filters, dropout events and hotspot grid, aircraft type mix, beacon mix, top

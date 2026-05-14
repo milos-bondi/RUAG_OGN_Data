@@ -851,6 +851,7 @@ def dashboard_snapshot(session: Session) -> dict[str, object]:
         "density_cells": fetch_density_cells(session, since),
         "dropout_candidates": fetch_dropout_candidates(session, since),
         "dropout_hotspots": fetch_dropout_hotspots(session, since),
+        "all_time_dropout_hotspots": fetch_dropout_hotspots(session, None),
         "aircraft_types": fetch_aircraft_type_counts(session, since),
         "beacons": fetch_beacon_counts(session, since),
         "top_aircraft": fetch_top_aircraft(session, since),

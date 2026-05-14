@@ -8,6 +8,7 @@ from types import SimpleNamespace
 from ogn.client import AprsClient
 from ogn.client import settings as client_settings
 from ogn.parser import AprsParseError, parse
+from ogn.parser.exceptions import OgnParseError
 from sqlalchemy.orm import Session
 
 from src.envs import env
@@ -116,7 +117,7 @@ def handle_message(session: Session, counters: dict[str, int], raw_message: str)
 
     try:
         beacon = parse(raw_message)
-    except (AprsParseError, ValueError) as exc:
+    except (AprsParseError, OgnParseError, ValueError) as exc:
         counters["errors"] += 1
         if env.collection_profile == "all":
             store_raw_message(session, raw_message, "parse_error", str(exc))

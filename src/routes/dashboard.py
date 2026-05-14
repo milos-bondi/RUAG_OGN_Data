@@ -289,6 +289,7 @@ def render_json(snapshot: dict[str, object]) -> str:
         "densityCells": snapshot["density_cells"],
         "dropoutCandidates": snapshot["dropout_candidates"],
         "dropoutHotspots": snapshot["dropout_hotspots"],
+        "allTimeDropoutHotspots": snapshot["all_time_dropout_hotspots"],
         "gridDegrees": snapshot["grid_degrees"],
     }
 
@@ -329,30 +330,41 @@ def render_dashboard_html(snapshot: dict[str, object]) -> str:
 	  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 	  <style>
 	    :root {{
-	      color-scheme: light;
-	      --ink: #14202b;
-	      --muted: #617080;
-	      --line: #dce2e8;
-	      --bg: #f4f6f8;
-	      --panel: #ffffff;
-	      --accent: #286fb4;
-	      --green: #168253;
-	      --red: #bd372d;
-	      --amber: #b76b12;
-	      --teal: #168a8b;
-	      --navy: #1f3448;
+	      color-scheme: dark;
+	      --ink: #e7edf3;
+	      --muted: #8fa1b3;
+	      --line: #263648;
+	      --line-strong: #38506a;
+	      --bg: #08111b;
+	      --panel: #101b27;
+	      --panel-2: #142334;
+	      --panel-3: #0d1722;
+	      --accent: #4ea1ff;
+	      --accent-soft: rgba(78, 161, 255, 0.16);
+	      --green: #4fd18b;
+	      --red: #ff5f57;
+	      --amber: #f6b34b;
+	      --teal: #44d2c8;
+	      --navy: #0b1622;
+	      --shadow: 0 18px 50px rgba(0, 0, 0, 0.34);
 	    }}
 	    * {{ box-sizing: border-box; }}
 	    body {{
 	      margin: 0;
 	      font-family: "Aptos", "Segoe UI", sans-serif;
-      color: var(--ink);
-      background: var(--bg);
+	      color: var(--ink);
+	      background:
+	        radial-gradient(circle at 15% -10%, rgba(78, 161, 255, 0.18), transparent 34%),
+	        radial-gradient(circle at 90% 0%, rgba(68, 210, 200, 0.11), transparent 32%),
+	        linear-gradient(180deg, #07111b 0%, #0a1320 46%, #08111b 100%);
+	      min-height: 100vh;
 	    }}
 	    header {{
 	      padding: 18px 28px 14px;
-	      background: var(--panel);
-	      border-bottom: 1px solid var(--line);
+	      background: rgba(10, 19, 30, 0.88);
+	      border-bottom: 1px solid rgba(78, 161, 255, 0.18);
+	      backdrop-filter: blur(18px);
+	      box-shadow: 0 10px 36px rgba(0, 0, 0, 0.24);
 	      position: sticky;
 	      top: 0;
 	      z-index: 1000;
@@ -365,10 +377,11 @@ def render_dashboard_html(snapshot: dict[str, object]) -> str:
 	      display: grid;
 	      gap: 2px;
 	      min-width: 118px;
-	      border: 1px solid var(--line);
+	      border: 1px solid rgba(78, 161, 255, 0.22);
 	      border-radius: 8px;
 	      padding: 8px 10px;
-	      background: #fbfcfd;
+	      background: linear-gradient(180deg, rgba(20, 35, 52, 0.92), rgba(13, 23, 34, 0.92));
+	      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
 	    }}
 	    .chip-label {{ color: var(--muted); font-size: 11px; text-transform: uppercase; font-weight: 750; }}
 	    .chip-value {{ font-size: 13px; font-weight: 760; }}
@@ -376,15 +389,17 @@ def render_dashboard_html(snapshot: dict[str, object]) -> str:
 	    .chip-value.warn {{ color: var(--amber); }}
 	    .nav {{ display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }}
 	    .nav a {{
-	      border: 1px solid var(--line);
+	      border: 1px solid rgba(78, 161, 255, 0.2);
 	      border-radius: 6px;
 	      padding: 7px 10px;
-      color: var(--ink);
-      background: #fbfcfd;
-      text-decoration: none;
+	      color: var(--ink);
+	      background: rgba(20, 35, 52, 0.72);
+	      text-decoration: none;
 	      font-size: 13px;
 	      font-weight: 650;
+	      transition: background 140ms ease, border-color 140ms ease, color 140ms ease;
 	    }}
+	    .nav a:hover {{ border-color: var(--accent); background: var(--accent-soft); color: #ffffff; }}
 	    main {{ display: grid; gap: 18px; padding: 18px 28px 34px; }}
 	    section {{ scroll-margin-top: 120px; }}
 	    .hero {{
@@ -395,22 +410,31 @@ def render_dashboard_html(snapshot: dict[str, object]) -> str:
 	    }}
 	    .metrics {{ display: grid; grid-template-columns: repeat(5, minmax(150px, 1fr)); gap: 12px; }}
 	    .side-metrics {{ display: grid; grid-template-columns: 1fr 1fr; gap: 0; }}
-	    .side-stat {{ padding: 13px 16px; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); }}
+	    .side-stat {{ padding: 13px 16px; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); background: rgba(255, 255, 255, 0.012); }}
 	    .side-stat:nth-child(2n) {{ border-right: 0; }}
 	    .side-label {{ color: var(--muted); font-size: 11px; text-transform: uppercase; font-weight: 750; }}
 	    .side-value {{ margin-top: 6px; font-size: 21px; line-height: 1.1; font-weight: 760; }}
 	    .metric, .panel {{
-	      background: var(--panel);
-	      border: 1px solid var(--line);
+	      background: linear-gradient(180deg, rgba(16, 27, 39, 0.98), rgba(13, 23, 34, 0.98));
+	      border: 1px solid rgba(78, 161, 255, 0.14);
 	      border-radius: 8px;
+	      box-shadow: var(--shadow);
 	    }}
-	    .metric {{ padding: 14px 16px; min-width: 0; }}
+	    .metric {{ padding: 14px 16px; min-width: 0; position: relative; overflow: hidden; }}
+	    .metric::before {{
+	      content: "";
+	      position: absolute;
+	      inset: 0 0 auto;
+	      height: 2px;
+	      background: linear-gradient(90deg, var(--accent), var(--teal));
+	      opacity: 0.76;
+	    }}
 	    .metric-label {{ color: var(--muted); font-size: 12px; text-transform: uppercase; }}
 	    .metric-value {{ margin-top: 7px; font-size: 24px; font-weight: 720; line-height: 1.1; }}
 	    .layout {{ display: grid; grid-template-columns: minmax(520px, 1.5fr) minmax(360px, .9fr); gap: 18px; align-items: start; }}
 	    .two-col {{ display: grid; grid-template-columns: 1fr 1fr; gap: 18px; align-items: start; }}
 	    .panel {{ overflow: hidden; }}
-	    .panel h2 {{ margin: 0; padding: 14px 16px; border-bottom: 1px solid var(--line); font-size: 16px; }}
+	    .panel h2 {{ margin: 0; padding: 14px 16px; border-bottom: 1px solid var(--line); font-size: 16px; color: #f4f8fc; }}
 	    .panel-title {{
 	      display: flex;
 	      align-items: center;
@@ -418,19 +442,38 @@ def render_dashboard_html(snapshot: dict[str, object]) -> str:
 	      gap: 12px;
 	      padding: 14px 16px;
 	      border-bottom: 1px solid var(--line);
+	      background: rgba(255, 255, 255, 0.018);
 	    }}
 	    .panel-title h2 {{ padding: 0; border: 0; }}
 	    .panel-title .subtle {{ text-align: right; }}
 	    .panel-body {{ padding: 12px 16px; }}
-	    #map {{ width: 100%; height: 690px; background: #eef2f4; }}
+	    #map {{ width: 100%; height: 690px; background: #07111b; }}
+	    .leaflet-container {{ background: #07111b; font-family: "Aptos", "Segoe UI", sans-serif; }}
+	    .leaflet-popup-content-wrapper, .leaflet-popup-tip {{
+	      background: #101b27;
+	      color: var(--ink);
+	      border: 1px solid var(--line-strong);
+	      box-shadow: 0 14px 36px rgba(0, 0, 0, 0.46);
+	    }}
+	    .leaflet-popup-content {{ color: var(--ink); line-height: 1.45; }}
+	    .leaflet-control-zoom a {{
+	      background: #101b27 !important;
+	      color: var(--ink) !important;
+	      border-color: var(--line) !important;
+	    }}
+	    .leaflet-control-attribution {{
+	      background: rgba(8, 17, 27, 0.72) !important;
+	      color: var(--muted) !important;
+	    }}
+	    .leaflet-control-attribution a {{ color: var(--accent) !important; }}
 	    .filters {{
 	      display: grid;
-	      grid-template-columns: repeat(5, minmax(140px, 1fr));
+	      grid-template-columns: repeat(6, minmax(130px, 1fr));
 	      gap: 10px;
       padding: 12px 16px;
-      border-bottom: 1px solid var(--line);
-      background: #fbfcfd;
-    }}
+	      border-bottom: 1px solid var(--line);
+	      background: rgba(12, 22, 33, 0.78);
+	    }}
     .filters label {{ display: grid; gap: 4px; color: var(--muted); font-size: 12px; font-weight: 650; }}
     .filters select, .filters input, .filters button {{
       width: 100%;
@@ -438,16 +481,22 @@ def render_dashboard_html(snapshot: dict[str, object]) -> str:
       border-radius: 6px;
       padding: 7px 8px;
       font: inherit;
-      color: var(--ink);
-      background: var(--panel);
-    }}
-	    .filters button {{ align-self: end; cursor: pointer; font-weight: 700; }}
-	    .filters button.active {{ background: var(--red); color: #fff; border-color: var(--red); }}
+	      color: var(--ink);
+	      background: #0b1622;
+	      outline: none;
+	    }}
+	    .filters select:focus, .filters input:focus, .filters button:focus {{
+	      border-color: var(--accent);
+	      box-shadow: 0 0 0 3px rgba(78, 161, 255, 0.16);
+	    }}
+	    .filters button {{ align-self: end; cursor: pointer; font-weight: 700; transition: transform 120ms ease, border-color 120ms ease, background 120ms ease; }}
+	    .filters button:hover {{ transform: translateY(-1px); border-color: var(--accent); }}
+	    .filters button.active {{ background: linear-gradient(180deg, #ff6b61, #cf362e); color: #fff; border-color: #ff8178; }}
 	    .view-track {{
 	      border: 1px solid var(--accent);
 	      border-radius: 6px;
 	      padding: 5px 9px;
-	      background: #f3f8fd;
+	      background: rgba(78, 161, 255, 0.12);
 	      color: var(--accent);
 	      cursor: pointer;
 	      font: inherit;
@@ -464,10 +513,11 @@ def render_dashboard_html(snapshot: dict[str, object]) -> str:
 	      color: var(--muted);
 	      font-size: 13px;
 	      border-top: 1px solid var(--line);
+	      background: rgba(8, 17, 27, 0.62);
 	    }}
 	    .legend {{ display: flex; flex-wrap: wrap; gap: 10px; justify-content: flex-end; }}
 	    .legend-item {{ display: inline-flex; gap: 6px; align-items: center; white-space: nowrap; }}
-	    .swatch {{ width: 10px; height: 10px; border-radius: 999px; display: inline-block; }}
+	    .swatch {{ width: 10px; height: 10px; border-radius: 999px; display: inline-block; box-shadow: 0 0 14px currentColor; }}
 	    .side-stack {{ display: grid; gap: 18px; }}
 	    .explain {{ padding: 13px 16px; color: var(--muted); font-size: 13px; line-height: 1.45; }}
 	    .inspector {{
@@ -479,24 +529,29 @@ def render_dashboard_html(snapshot: dict[str, object]) -> str:
 	    }}
 	    table {{ width: 100%; border-collapse: collapse; font-size: 12px; }}
 	    th, td {{ padding: 7px 8px; border-bottom: 1px solid var(--line); text-align: left; white-space: nowrap; }}
-    th {{ color: var(--muted); font-weight: 700; }}
-    tr[data-segment-id] {{ cursor: pointer; }}
-    tr[data-segment-id]:hover {{ background: #f2f6f9; }}
-    .num {{ text-align: right; }}
-    .table-wrap {{ overflow-x: auto; }}
-    .bar {{ height: 8px; background: #edf0f3; border-radius: 999px; overflow: hidden; min-width: 120px; }}
-    .bar span {{ display: block; height: 100%; background: var(--accent); }}
-    .badge {{
+	    th {{ color: #a9bad0; font-weight: 760; background: rgba(255, 255, 255, 0.025); position: sticky; top: 0; z-index: 1; }}
+	    td {{ color: #d8e2ec; }}
+	    tr[data-segment-id] {{ cursor: pointer; }}
+	    tbody tr:hover {{ background: rgba(78, 161, 255, 0.075); }}
+	    tr[data-segment-id]:hover {{ background: rgba(78, 161, 255, 0.11); }}
+	    .num {{ text-align: right; }}
+	    .table-wrap {{ overflow-x: auto; }}
+	    .table-wrap::-webkit-scrollbar {{ height: 10px; }}
+	    .table-wrap::-webkit-scrollbar-track {{ background: #0b1622; }}
+	    .table-wrap::-webkit-scrollbar-thumb {{ background: #29405a; border-radius: 999px; }}
+	    .bar {{ height: 8px; background: #1b2a3b; border-radius: 999px; overflow: hidden; min-width: 120px; }}
+	    .bar span {{ display: block; height: 100%; background: linear-gradient(90deg, var(--accent), var(--teal)); }}
+	    .badge {{
       display: inline-block;
       margin-left: 6px;
       padding: 2px 6px;
       border-radius: 999px;
-      background: #e5f4ec;
-      color: var(--green);
+	      background: rgba(79, 209, 139, 0.16);
+	      color: var(--green);
       font-size: 11px;
       font-weight: 700;
     }}
-    .note {{ padding: 12px 16px; color: var(--muted); font-size: 13px; border-top: 1px solid var(--line); }}
+	    .note {{ padding: 12px 16px; color: var(--muted); font-size: 13px; border-top: 1px solid var(--line); background: rgba(255, 255, 255, 0.015); }}
     .section-title {{ display: flex; justify-content: space-between; gap: 12px; align-items: baseline; }}
 	    .section-title h2 {{ margin: 0; font-size: 20px; }}
 	    .empty {{ color: var(--muted); padding: 14px 8px; }}
@@ -537,7 +592,7 @@ def render_dashboard_html(snapshot: dict[str, object]) -> str:
 	      <div class="panel">
 	        <div class="panel-title">
 	          <h2>Observation Density and Dropout Map</h2>
-	          <div class="subtle">Interactive layers: {escape(window_label)}. Generated {escape(generated_at)}.</div>
+	          <div class="subtle">Interactive layers: {escape(window_label)} plus all-time dropout grid. Generated {escape(generated_at)}.</div>
 	        </div>
 	        <div class="filters">
 	          <label>Aircraft type
@@ -553,20 +608,23 @@ def render_dashboard_html(snapshot: dict[str, object]) -> str:
             <input id="minObs" type="number" value="10" min="1" step="1">
           </label>
           <button id="dropoutToggle" type="button" aria-pressed="false">Show dropout events</button>
-	          <button id="hotspotToggle" type="button" aria-pressed="false">Show dropout grid</button>
+	          <button id="hotspotToggle" type="button" aria-pressed="false">Show 24h dropout grid</button>
+	          <button id="allTimeHotspotToggle" type="button" aria-pressed="false">Show all-time grid</button>
 	        </div>
 	        <div id="map" role="application" aria-label="OGN observation density map"></div>
 	        <div class="map-footer">
 	          <div>
 	            Visible cells: <strong id="visibleCellCount">0</strong>.
 	            Dropout events: <strong id="visibleDropoutCount">0</strong> / {len(snapshot["dropout_candidates"]):,}.
-	            Dropout grid: <strong id="visibleHotspotCount">0</strong> / {len(snapshot["dropout_hotspots"]):,}.
+	            24h grid: <strong id="visibleHotspotCount">0</strong> / {len(snapshot["dropout_hotspots"]):,}.
+	            All-time grid: <strong id="visibleAllTimeHotspotCount">0</strong> / {len(snapshot["all_time_dropout_hotspots"]):,}.
 	          </div>
 	          <div class="legend" aria-label="Map legend">
 	            <span class="legend-item"><span class="swatch" style="background:#286fb4"></span> density</span>
 	            <span class="legend-item"><span class="swatch" style="background:#168253"></span> likely unconventional</span>
 	            <span class="legend-item"><span class="swatch" style="background:#dc2626"></span> dropout event</span>
-	            <span class="legend-item"><span class="swatch" style="background:#f97316"></span> dropout grid</span>
+	            <span class="legend-item"><span class="swatch" style="background:#f97316"></span> 24h dropout grid</span>
+	            <span class="legend-item"><span class="swatch" style="background:#7f1d1d"></span> all-time dropout grid</span>
 	          </div>
 	        </div>
 	      </div>
@@ -581,7 +639,7 @@ def render_dashboard_html(snapshot: dict[str, object]) -> str:
 	            <div class="side-stat"><div class="side-label">Track segments</div><div class="side-value">{fmt_int(engineering["track_segments"])}</div></div>
 	            <div class="side-stat"><div class="side-label">Good segments</div><div class="side-value">{fmt_int(engineering["good_segments"])}</div></div>
 	          </div>
-	          <div class="explain">The page is generated from cached SQL snapshots. The status totals are all-time; map layers and hotspot tables focus on {escape(window_label)} for fast demo interaction.</div>
+		          <div class="explain">The page is generated from cached SQL snapshots. Status totals are all-time; the recent map layers focus on {escape(window_label)}, and the all-time dropout grid is recomputed on each dashboard refresh.</div>
 	        </div>
 	        <div class="panel">
 	          <h2>Coverage Signals</h2>
@@ -590,8 +648,9 @@ def render_dashboard_html(snapshot: dict[str, object]) -> str:
 	            <div class="side-stat"><div class="side-label">Unique IDs</div><div class="side-value">{fmt_int(summary["unique_aircraft"])}</div></div>
 	            <div class="side-stat"><div class="side-label">Likely unconv. IDs</div><div class="side-value">{fmt_int(summary["unconventional_aircraft"])}</div></div>
 	            <div class="side-stat"><div class="side-label">Dropout events</div><div class="side-value">{fmt_int(len(snapshot["dropout_candidates"]))}</div></div>
-	            <div class="side-stat"><div class="side-label">Dropout grid cells</div><div class="side-value">{fmt_int(len(snapshot["dropout_hotspots"]))}</div></div>
-	            <div class="side-stat"><div class="side-label">Map grid</div><div class="side-value">{fmt(snapshot["grid_degrees"], 2)}°</div></div>
+		            <div class="side-stat"><div class="side-label">24h grid cells</div><div class="side-value">{fmt_int(len(snapshot["dropout_hotspots"]))}</div></div>
+		            <div class="side-stat"><div class="side-label">All-time grid cells</div><div class="side-value">{fmt_int(len(snapshot["all_time_dropout_hotspots"]))}</div></div>
+		            <div class="side-stat"><div class="side-label">Map grid</div><div class="side-value">{fmt(snapshot["grid_degrees"], 2)}°</div></div>
 	          </div>
 	          <div id="mapInspector" class="inspector">Click a density cell, dropout event, or hotspot grid cell to inspect the signal behind it.</div>
 	        </div>
@@ -603,7 +662,7 @@ def render_dashboard_html(snapshot: dict[str, object]) -> str:
 	              <tbody>{render_hotspot_rows(snapshot["dropout_hotspots"])}</tbody>
 	            </table>
 	          </div>
-	          <div class="note">Hotspots are grid cells where plausible observation gaps are frequent. The bias hint is a quick interpretation, not a final diagnosis.</div>
+	          <div class="note">This table uses the recent dashboard window. Use the all-time grid button to see persistent coverage-bias areas since collection started.</div>
 	        </div>
 	      </div>
 	    </section>
@@ -616,7 +675,18 @@ def render_dashboard_html(snapshot: dict[str, object]) -> str:
 	          <tbody>{render_hotspot_rows(snapshot["dropout_hotspots"])}</tbody>
 	        </table>
 	      </div>
-	      <div class="note">This table supports the map overlay: high dropout rate with many transitions suggests a spatial coverage issue; high receiver or aircraft concentration means the signal needs more careful interpretation.</div>
+	      <div class="note">This table supports the recent-window map overlay: high dropout rate with many transitions suggests a spatial coverage issue; high receiver or aircraft concentration means the signal needs more careful interpretation.</div>
+	    </section>
+
+	    <section class="panel">
+	      <h2>All-Time Dropout Grid Analysis</h2>
+	      <div class="table-wrap">
+	        <table>
+	          <thead><tr><th>Bias hint</th><th class="num">Rate</th><th class="num">Drops</th><th class="num">Transitions</th><th class="num">Aircraft</th><th class="num">Receivers</th><th>Dominant type</th><th>Altitude band</th><th>Top receiver</th><th class="num">Receiver share</th><th class="num">P95 dropout s</th><th class="num">Max dropout s</th></tr></thead>
+	          <tbody>{render_hotspot_rows(snapshot["all_time_dropout_hotspots"])}</tbody>
+	        </table>
+	      </div>
+	      <div class="note">This all-time view is recomputed on every dashboard refresh and shows where signal loss has accumulated since data collection began.</div>
 	    </section>
 
 	    <section id="data-engineering" class="section-title">
@@ -727,32 +797,38 @@ def render_dashboard_html(snapshot: dict[str, object]) -> str:
     const densityCells = payload.densityCells;
     const dropoutCandidates = payload.dropoutCandidates;
     const dropoutHotspots = payload.dropoutHotspots;
+    const allTimeDropoutHotspots = payload.allTimeDropoutHotspots;
     const gridSizeDeg = payload.gridDegrees;
     const switzerlandCenter = [46.8, 8.2];
     const map = L.map("map", {{ scrollWheelZoom: true }}).setView(switzerlandCenter, 7);
-    L.tileLayer("https://{{s}}.tile.openstreetmap.org/{{z}}/{{x}}/{{y}}.png", {{
+    L.tileLayer("https://{{s}}.basemaps.cartocdn.com/dark_all/{{z}}/{{x}}/{{y}}{{r}}.png", {{
       maxZoom: 18,
-      attribution: "&copy; OpenStreetMap contributors"
+      attribution: "&copy; OpenStreetMap contributors &copy; CARTO"
     }}).addTo(map);
 
 	    const densityLayer = L.layerGroup().addTo(map);
 	    const dropoutLayer = L.layerGroup();
 	    const hotspotLayer = L.layerGroup();
+	    const allTimeHotspotLayer = L.layerGroup();
 	    const trajectoryLayer = L.layerGroup().addTo(map);
     const aircraftTypeFilter = document.getElementById("aircraftTypeFilter");
     const classFilter = document.getElementById("classFilter");
     const minObs = document.getElementById("minObs");
-    const dropoutToggle = document.getElementById("dropoutToggle");
-    const hotspotToggle = document.getElementById("hotspotToggle");
+	    const dropoutToggle = document.getElementById("dropoutToggle");
+	    const hotspotToggle = document.getElementById("hotspotToggle");
+	    const allTimeHotspotToggle = document.getElementById("allTimeHotspotToggle");
 	    const visibleCellCount = document.getElementById("visibleCellCount");
 	    const visibleDropoutCount = document.getElementById("visibleDropoutCount");
 	    const visibleHotspotCount = document.getElementById("visibleHotspotCount");
+	    const visibleAllTimeHotspotCount = document.getElementById("visibleAllTimeHotspotCount");
 	    const mapInspector = document.getElementById("mapInspector");
 	    const maxObservations = Math.max(...densityCells.map(cell => cell.observations), 1);
 	    const maxDropoutGap = Math.max(...dropoutCandidates.map(candidate => candidate.gap_s), 1);
 	    const maxHotspotRate = Math.max(...dropoutHotspots.map(cell => cell.dropout_rate), 0.01);
+	    const maxAllTimeHotspotRate = Math.max(...allTimeDropoutHotspots.map(cell => cell.dropout_rate), 0.01);
     let dropoutsVisible = false;
     let hotspotsVisible = false;
+    let allTimeHotspotsVisible = false;
 
     function fillFilter(select, values) {{
       for (const value of values) {{
@@ -826,17 +902,17 @@ def render_dashboard_html(snapshot: dict[str, object]) -> str:
 	      `;
 	    }}
 
-    function hotspotColor(cell) {{
-      const intensity = Math.min(cell.dropout_rate / maxHotspotRate, 1);
+    function hotspotColor(cell, maxRate) {{
+      const intensity = Math.min(cell.dropout_rate / maxRate, 1);
       if (intensity > 0.75) return "#991b1b";
       if (intensity > 0.5) return "#dc2626";
       if (intensity > 0.25) return "#f97316";
       return "#facc15";
     }}
 
-	    function hotspotPopupHtml(cell) {{
+	    function hotspotPopupHtml(cell, scopeLabel) {{
 	      return `
-	        <strong>Dropout hotspot cell</strong><br>
+	        <strong>${{scopeLabel}} hotspot cell</strong><br>
 	        ${{cell.bias_hint}}<br>
 	        dropout rate ${{(cell.dropout_rate * 100).toFixed(2)}}%<br>
 	        dropouts ${{cell.dropout_count.toLocaleString()}} / transitions ${{cell.transition_count.toLocaleString()}}<br>
@@ -848,9 +924,9 @@ def render_dashboard_html(snapshot: dict[str, object]) -> str:
 	      `;
 	    }}
 
-	    function inspectHotspot(cell) {{
+	    function inspectHotspot(cell, scopeLabel) {{
 	      mapInspector.innerHTML = `
-	        <strong>Dropout hotspot</strong><br>
+	        <strong>${{scopeLabel}} dropout hotspot</strong><br>
 	        <strong>${{cell.bias_hint}}</strong><br>
 	        ${{(cell.dropout_rate * 100).toFixed(2)}}% dropout rate · ${{cell.dropout_count.toLocaleString()}} / ${{cell.transition_count.toLocaleString()}} transitions<br>
 	        ${{cell.unique_aircraft.toLocaleString()}} aircraft · ${{cell.unique_receivers.toLocaleString()}} receivers<br>
@@ -872,7 +948,7 @@ def render_dashboard_html(snapshot: dict[str, object]) -> str:
 	        L.circleMarker([cell.lat, cell.lon], {{
 	          radius,
 	          stroke: true,
-	          color: "#ffffff",
+	          color: "#d8f3ff",
 	          weight: 1,
 	          fillColor: colorFor(cell),
 	          fillOpacity: cell.unconventional ? 0.55 : 0.35
@@ -911,10 +987,29 @@ def render_dashboard_html(snapshot: dict[str, object]) -> str:
             stroke: true,
             color: "#7f1d1d",
             weight: 1,
-            fillColor: hotspotColor(cell),
+            fillColor: hotspotColor(cell, maxHotspotRate),
             fillOpacity: 0.42
           }}
-	        ).bindPopup(hotspotPopupHtml(cell)).on("click", () => inspectHotspot(cell)).addTo(hotspotLayer);
+	        ).bindPopup(hotspotPopupHtml(cell, "24h")).on("click", () => inspectHotspot(cell, "24h")).addTo(hotspotLayer);
+	      }}
+	    }}
+
+	    function drawAllTimeHotspots() {{
+	      allTimeHotspotLayer.clearLayers();
+	      visibleAllTimeHotspotCount.textContent = allTimeHotspotsVisible ? allTimeDropoutHotspots.length.toLocaleString() : "0";
+	      if (!allTimeHotspotsVisible) return;
+	      const half = gridSizeDeg / 2;
+	      for (const cell of allTimeDropoutHotspots) {{
+	        L.rectangle(
+	          [[cell.lat - half, cell.lon - half], [cell.lat + half, cell.lon + half]],
+	          {{
+	            stroke: true,
+	            color: "#450a0a",
+	            weight: 1.2,
+	            fillColor: hotspotColor(cell, maxAllTimeHotspotRate),
+	            fillOpacity: 0.28
+	          }}
+	        ).bindPopup(hotspotPopupHtml(cell, "All-time")).on("click", () => inspectHotspot(cell, "All-time")).addTo(allTimeHotspotLayer);
 	      }}
 	    }}
 
@@ -928,21 +1023,21 @@ def render_dashboard_html(snapshot: dict[str, object]) -> str:
 	      if (!latLngs.length) return;
 
 	      const line = L.polyline(latLngs, {{
-	        color: "#0f5ea8",
+	        color: "#4ea1ff",
 	        weight: 4,
 	        opacity: 0.92,
 	      }}).addTo(trajectoryLayer);
 	      L.circleMarker(latLngs[0], {{
 	        radius: 6,
-	        color: "#0f5ea8",
-	        fillColor: "#ffffff",
+	        color: "#4ea1ff",
+	        fillColor: "#0b1622",
 	        fillOpacity: 1,
 	        weight: 3,
 	      }}).bindTooltip("trajectory start").addTo(trajectoryLayer);
 	      L.circleMarker(latLngs[latLngs.length - 1], {{
 	        radius: 7,
-	        color: "#0f5ea8",
-	        fillColor: "#0f5ea8",
+	        color: "#4ea1ff",
+	        fillColor: "#4ea1ff",
 	        fillOpacity: 1,
 	        weight: 2,
 	      }}).bindTooltip("trajectory end").addTo(trajectoryLayer);
@@ -986,10 +1081,17 @@ def render_dashboard_html(snapshot: dict[str, object]) -> str:
     hotspotToggle.addEventListener("click", () => {{
       hotspotsVisible = !hotspotsVisible;
       hotspotToggle.classList.toggle("active", hotspotsVisible);
-      hotspotToggle.textContent = hotspotsVisible ? "Hide dropout grid" : "Show dropout grid";
+      hotspotToggle.textContent = hotspotsVisible ? "Hide 24h dropout grid" : "Show 24h dropout grid";
       if (hotspotsVisible) hotspotLayer.addTo(map); else map.removeLayer(hotspotLayer);
       drawHotspots();
     }});
+	    allTimeHotspotToggle.addEventListener("click", () => {{
+	      allTimeHotspotsVisible = !allTimeHotspotsVisible;
+	      allTimeHotspotToggle.classList.toggle("active", allTimeHotspotsVisible);
+	      allTimeHotspotToggle.textContent = allTimeHotspotsVisible ? "Hide all-time grid" : "Show all-time grid";
+	      if (allTimeHotspotsVisible) allTimeHotspotLayer.addTo(map); else map.removeLayer(allTimeHotspotLayer);
+	      drawAllTimeHotspots();
+	    }});
 	    document.querySelectorAll("tr[data-segment-id]").forEach(row => {{
 	      row.addEventListener("click", () => previewSegment(row.dataset.segmentId));
 	    }});
@@ -1016,10 +1118,10 @@ def loading_html() -> str:
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>RUAG OGN Dashboard</title>
   <style>
-    body {{ margin: 0; font-family: "Aptos", "Segoe UI", sans-serif; background: #f6f7f9; color: #17202a; }}
+    body {{ margin: 0; font-family: "Aptos", "Segoe UI", sans-serif; background: #08111b; color: #e7edf3; }}
     main {{ min-height: 100vh; display: grid; place-items: center; }}
-    div {{ border: 1px solid #d9dee5; border-radius: 8px; background: #fff; padding: 22px 26px; }}
-    p {{ margin: 6px 0 0; color: #5c6875; }}
+    div {{ border: 1px solid #263648; border-radius: 8px; background: #101b27; padding: 22px 26px; box-shadow: 0 18px 50px rgba(0, 0, 0, .34); }}
+    p {{ margin: 6px 0 0; color: #8fa1b3; }}
   </style>
 </head>
 <body><main><div><strong>Building dashboard snapshot</strong><p>Refreshing automatically every 2 seconds.</p></div></main></body>

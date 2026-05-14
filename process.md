@@ -331,13 +331,20 @@ The `bias_hint` is not a final diagnosis. It is an interview/demo-friendly inter
 | `persistent spatial hotspot` | The cell has both many dropouts and a high dropout rate, making it a stronger candidate coverage-bias signal. |
 | `mixed coverage signal` | No single simple explanation dominates. The cell may need deeper analysis. |
 
-The dashboard shows dropout grids in three places:
+The dashboard shows recent-window dropout grids in three places:
 
 1. as a map overlay
 2. in the side-panel `Top Dropout Hotspots` table
 3. in the dedicated `Dropout Grid Analysis` table
 
-This is useful for an interview because it moves the dashboard from "there are missing points" to "here is where missingness may be spatial, receiver-driven, altitude-sensitive, or aircraft-specific."
+The dashboard also computes an all-time dropout grid from the full `cleaned_observations` history. That all-time grid appears:
+
+1. as a separate `Show all-time grid` map button
+2. in the `All-Time Dropout Grid Analysis` table
+
+Both recent-window and all-time grids are recomputed during each dashboard cache refresh. This means the all-time view grows with newly collected and processed data, while the 24h view stays useful for recent operational behavior.
+
+This is useful for an interview because it moves the dashboard from "there are missing points" to "here is where missingness may be spatial, receiver-driven, altitude-sensitive, or aircraft-specific." The 24h view shows what is happening recently; the all-time view shows where signal loss has accumulated since collection began.
 
 ## Dashboard
 
@@ -364,9 +371,9 @@ This is controlled by:
 OGN_DASHBOARD_REFRESH_SECONDS=30
 ```
 
-The dashboard keeps all-time status totals visible, but the interactive map,
-aircraft mix, beacon mix, raw quality tracks, and dropout overlays use a recent
-time window for speed:
+The dashboard keeps all-time status totals visible, but the density map,
+aircraft mix, beacon mix, raw quality tracks, and dropout event overlay use a
+recent time window for speed:
 
 ```text
 OGN_DASHBOARD_WINDOW_HOURS=24
@@ -402,9 +409,11 @@ The dashboard includes:
 - best unconventional trajectory candidates
 - raw quality tracks
 - dropout event overlay
-- dropout hotspot grid overlay
-- top dropout hotspot table
-- dedicated dropout grid analysis table
+- 24h dropout hotspot grid overlay
+- all-time dropout hotspot grid overlay
+- top recent-window dropout hotspot table
+- dedicated recent-window dropout grid analysis table
+- dedicated all-time dropout grid analysis table
 - map inspector for clicked cells, dropout events, and hotspot grids
 
 The map uses client-side JavaScript and Leaflet. The data needed by the map is embedded into the cached HTML snapshot, so filter changes in the browser do not call the server again.
@@ -453,7 +462,7 @@ The snapshot includes:
 - `fetch_dropout_candidates()`: individual dropout-like gaps
 - `fetch_dropout_hotspots()`: aggregate dropout grid cells with receiver, aircraft, altitude, gap, and bias-hint fields
 
-Most map-facing dashboard queries use the recent `OGN_DASHBOARD_WINDOW_HOURS` window. This keeps the dashboard responsive on a large historical SQLite database. The main status totals remain all-time, and best unconventional trajectories remain all-time.
+Most map-facing dashboard queries use the recent `OGN_DASHBOARD_WINDOW_HOURS` window. This keeps the dashboard responsive on a large historical SQLite database. The main status totals, best unconventional trajectories, and all-time dropout grid remain all-time.
 
 ## JSON API
 
