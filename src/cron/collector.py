@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 from src.envs import env
 from src.db.session import SessionLocal, create_tables
 from src.db.models.ogn import PositionObservation, RawMessage
-from src.utils.time import utc_now_iso
+from src.utils.time import datetime_to_utc_iso, utc_now_iso
 
 
 UNCONVENTIONAL_BEACON_TYPES = {"flarm", "fanet", "naviter"}
@@ -95,7 +95,7 @@ def store_position(session: Session, raw: RawMessage, beacon: dict) -> None:
         device_address=beacon.get("address"),
         beacon_type=beacon.get("beacon_type"),
         receiver_name=beacon.get("receiver_name"),
-        timestamp=timestamp.isoformat() if timestamp else None,
+        timestamp=datetime_to_utc_iso(timestamp),
         latitude=beacon.get("latitude"),
         longitude=beacon.get("longitude"),
         altitude_m=beacon.get("altitude"),

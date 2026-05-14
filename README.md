@@ -77,9 +77,18 @@ OGN_APRS_SERVER_HOST=aprs.glidernet.org
 OGN_COLLECT_ON_STARTUP=true
 OGN_PROCESS_ON_STARTUP=true
 OGN_PROCESSOR_INTERVAL_SECONDS=15
-OGN_PROCESSOR_BATCH_SIZE=5000
+OGN_PROCESSOR_BATCH_SIZE=50000
 OGN_SEGMENT_GAP_SECONDS=60
 OGN_MAX_JUMP_SPEED_KMH=1200
+OGN_DASHBOARD_REFRESH_SECONDS=30
+OGN_DASHBOARD_WINDOW_HOURS=24
+OGN_DASHBOARD_GRID_DEGREES=0.05
+OGN_DASHBOARD_DROPOUT_LIMIT=3000
+OGN_DASHBOARD_DROPOUT_MIN_DISTANCE_KM=0.2
+OGN_DASHBOARD_DROPOUT_MAX_GAP_SECONDS=600
+OGN_DASHBOARD_DROPOUT_MAX_IMPLIED_SPEED_KMH=300
+OGN_DASHBOARD_DROPOUT_HOTSPOT_MIN_TRANSITIONS=30
+OGN_DASHBOARD_INCLUDE_ALL_DROPOUT_AIRCRAFT=false
 OGN_INCLUDE_OUTSIDE_SWISS=false
 OGN_INCLUDE_RECEIVERS=false
 OGN_INCLUDE_STATIC=false
@@ -129,13 +138,20 @@ http://127.0.0.1:8000/
 The dashboard HTML lives in:
 
 ```text
-src/static/index.html
+src/routes/dashboard.py
 ```
 
-The browser fetches fresh data from the API every 30 seconds. It shows raw and
-processed counts, Swiss density cells, a trajectory-interruption coverage proxy,
-aircraft type mix, top aircraft, and processed track segments. Click a segment
-row to inspect its trajectory.
+The dashboard is refreshed in the background and `/` serves the cached HTML, so
+opening the page does not recompute the full database snapshot. The page also
+auto-refreshes every `OGN_DASHBOARD_REFRESH_SECONDS`. All-time status totals are
+shown in the side panel, while the interactive map/dropout layers use the recent
+`OGN_DASHBOARD_WINDOW_HOURS` window for faster demo interaction.
+
+It shows raw and processed counts, Swiss density cells with browser-side
+filters, dropout events and hotspot grid, aircraft type mix, beacon mix, top
+aircraft, raw quality tracks, processed track segments, and ranked
+unconventional trajectories. Click a segment row to inspect its trajectory
+points on demand.
 
 ## API Routes
 

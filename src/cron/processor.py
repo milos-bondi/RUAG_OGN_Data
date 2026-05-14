@@ -386,15 +386,19 @@ class ProcessorService:
         while not self.stop_event.is_set():
             session = SessionLocal()
             try:
-                counts = process_once(session)
-                if counts["seen"]:
-                    print(
-                        f"{utc_now_iso()} processed seen={counts['seen']} kept={counts['kept']} "
-                        f"dropped={counts['dropped']} new_segments={counts['new_segments']} "
-                        f"appended={counts['appended']} "
-                        f"last_position_id={counts['last_position_id']}",
-                        flush=True,
-                    )
+                while not self.stop_event.is_set():
+                    counts = process_once(session)
+                    if counts["seen"]:
+                        print(
+                            f"{utc_now_iso()} processed seen={counts['seen']} "
+                            f"kept={counts['kept']} dropped={counts['dropped']} "
+                            f"new_segments={counts['new_segments']} appended={counts['appended']} "
+                            f"last_position_id={counts['last_position_id']}",
+                            flush=True,
+                        )
+
+                    if counts["seen"] < env.processor_batch_size:
+                        break
             except Exception as exc:
                 session.rollback()
                 print(f"{utc_now_iso()} processor_error={exc}", flush=True)

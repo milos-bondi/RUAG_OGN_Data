@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import math
-from datetime import datetime
+from datetime import datetime, timezone
 
 
 SWITZERLAND_BBOX = {
@@ -47,9 +47,14 @@ def parse_iso_timestamp(value: str | None) -> datetime | None:
         return None
 
     try:
-        return datetime.fromisoformat(value.replace("Z", "+00:00"))
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
     except ValueError:
         return None
+
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=timezone.utc)
+
+    return parsed.astimezone(timezone.utc)
 
 
 def seconds_between(start: datetime | None, end: datetime | None) -> float | None:
