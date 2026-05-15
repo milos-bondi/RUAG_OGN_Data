@@ -283,6 +283,73 @@ def render_hotspot_rows(items: list[dict[str, object]]) -> str:
     return "\n".join(rows) or '<tr><td colspan="12" class="empty">No dropout hotspots yet.</td></tr>'
 
 
+def stability_class(status: str) -> str:
+    """Return a CSS class for a stability status."""
+    if status == "stable":
+        return "stable"
+
+    if status == "watch":
+        return "watch"
+
+    if status == "moving":
+        return "moving"
+
+    return "thin"
+
+
+def status_pill(status: object) -> str:
+    """Render a colored stability status pill."""
+    label = str(status or "unavailable")
+    return f'<span class="status-pill {stability_class(label)}">{escape(label)}</span>'
+
+
+def render_stability_rows(items: list[dict[str, object]]) -> str:
+    """Render distribution stability rows."""
+    rows = []
+
+    # The table compares fixed-bin histograms from adjacent time windows.
+    for item in items:
+        wasserstein = item["wasserstein"]
+        rows.append(
+            f"""
+            <tr>
+              <td>{escape(str(item["name"]))}</td>
+              <td>{escape(str(item["source"]))}</td>
+              <td>{escape(str(item["unit"]))}</td>
+              <td class="num">{fmt_int(int(item["previous_n"] or 0))}</td>
+              <td class="num">{fmt_int(int(item["latest_n"] or 0))}</td>
+              <td class="num">{fmt(item["jensen_shannon"], 5)}</td>
+              <td class="num">{fmt(wasserstein, 3) if wasserstein is not None else ""}</td>
+              <td>{status_pill(item["status"])}</td>
+            </tr>
+            """
+        )
+
+    return "\n".join(rows) or '<tr><td colspan="8" class="empty">No stability data yet.</td></tr>'
+
+
+def render_type_stability_rows(items: list[dict[str, object]]) -> str:
+    """Render aircraft-type modelling readiness rows."""
+    rows = []
+
+    # This is a volume check, not a distribution test.
+    for item in items:
+        rows.append(
+            f"""
+            <tr>
+              <td>{escape(str(item["aircraft_type_name"]))}</td>
+              <td class="num">{fmt_int(int(item["previous_segments"] or 0))}</td>
+              <td class="num">{fmt_int(int(item["latest_segments"] or 0))}</td>
+              <td class="num">{fmt_int(int(item["previous_points"] or 0))}</td>
+              <td class="num">{fmt_int(int(item["latest_points"] or 0))}</td>
+              <td>{status_pill(item["status"])}</td>
+            </tr>
+            """
+        )
+
+    return "\n".join(rows) or '<tr><td colspan="6" class="empty">No type stability data yet.</td></tr>'
+
+
 def render_json(snapshot: dict[str, object]) -> str:
     """Render JSON data embedded for client-side map filtering."""
     payload = {
@@ -291,6 +358,7 @@ def render_json(snapshot: dict[str, object]) -> str:
         "dropoutHotspots": snapshot["dropout_hotspots"],
         "allTimeDropoutHotspots": snapshot["all_time_dropout_hotspots"],
         "gridDegrees": snapshot["grid_degrees"],
+        "distributionStability": snapshot["distribution_stability"],
     }
 
     return json.dumps(payload, separators=(",", ":")).replace("</", "<\\/")
@@ -300,6 +368,7 @@ def render_dashboard_html(snapshot: dict[str, object]) -> str:
     """Render the complete dashboard HTML."""
     summary = snapshot["summary"]
     engineering = snapshot["engineering"]
+    stability = snapshot["distribution_stability"]
     data_json = render_json(snapshot)
     generated_at = utc_now_iso()
     refresh_seconds = int(snapshot["refresh_seconds"])
@@ -492,6 +561,30 @@ def render_dashboard_html(snapshot: dict[str, object]) -> str:
 	    .filters button {{ align-self: end; cursor: pointer; font-weight: 700; transition: transform 120ms ease, border-color 120ms ease, background 120ms ease; }}
 	    .filters button:hover {{ transform: translateY(-1px); border-color: var(--accent); }}
 	    .filters button.active {{ background: linear-gradient(180deg, #ff6b61, #cf362e); color: #fff; border-color: #ff8178; }}
+	    .stability-controls {{
+	      display: grid;
+	      grid-template-columns: repeat(2, minmax(180px, 1fr));
+	      gap: 10px;
+	      padding: 12px 16px;
+	      border-bottom: 1px solid var(--line);
+	      background: rgba(12, 22, 33, 0.78);
+	    }}
+	    .stability-controls label {{ display: grid; gap: 4px; color: var(--muted); font-size: 12px; font-weight: 650; }}
+	    .stability-controls select {{
+	      width: 100%;
+	      border: 1px solid var(--line);
+	      border-radius: 6px;
+	      padding: 7px 8px;
+	      font: inherit;
+	      color: var(--ink);
+	      background: #0b1622;
+	      outline: none;
+	    }}
+	    .chart-grid {{ display: grid; grid-template-columns: 1.2fr .8fr; gap: 14px; padding: 14px 16px; }}
+	    .chart-card {{ border: 1px solid var(--line); border-radius: 8px; background: rgba(255, 255, 255, 0.014); overflow: hidden; }}
+	    .chart-title {{ padding: 10px 12px; color: #a9bad0; font-size: 12px; font-weight: 760; border-bottom: 1px solid var(--line); }}
+	    .chart-card svg {{ width: 100%; height: 230px; display: block; background: #0b1622; }}
+	    .chart-caption {{ min-height: 35px; padding: 9px 12px; color: var(--muted); font-size: 12px; border-top: 1px solid var(--line); }}
 	    .view-track {{
 	      border: 1px solid var(--accent);
 	      border-radius: 6px;
@@ -551,6 +644,20 @@ def render_dashboard_html(snapshot: dict[str, object]) -> str:
       font-size: 11px;
       font-weight: 700;
     }}
+	    .status-pill {{
+	      display: inline-block;
+	      min-width: 76px;
+	      padding: 3px 7px;
+	      border-radius: 999px;
+	      text-align: center;
+	      font-size: 11px;
+	      font-weight: 760;
+	      text-transform: uppercase;
+	    }}
+	    .status-pill.stable {{ background: rgba(79, 209, 139, 0.15); color: var(--green); }}
+	    .status-pill.watch {{ background: rgba(246, 179, 75, 0.15); color: var(--amber); }}
+	    .status-pill.moving {{ background: rgba(255, 95, 87, 0.15); color: var(--red); }}
+	    .status-pill.thin {{ background: rgba(143, 161, 179, 0.14); color: var(--muted); }}
 	    .note {{ padding: 12px 16px; color: var(--muted); font-size: 13px; border-top: 1px solid var(--line); background: rgba(255, 255, 255, 0.015); }}
     .section-title {{ display: flex; justify-content: space-between; gap: 12px; align-items: baseline; }}
 	    .section-title h2 {{ margin: 0; font-size: 20px; }}
@@ -583,6 +690,7 @@ def render_dashboard_html(snapshot: dict[str, object]) -> str:
 	      <a href="#live-map">Live Map</a>
 	      <a href="#dropout-grid">Dropout Grid</a>
 	      <a href="#data-engineering">Data Engineering</a>
+	      <a href="#distribution-stability">Distribution Stability</a>
 	      <a href="#track-candidates">Track Candidates</a>
 	      <a href="#beacon-types">Beacon Types</a>
 	    </nav>
@@ -701,6 +809,73 @@ def render_dashboard_html(snapshot: dict[str, object]) -> str:
       {metric("Last processed ID", fmt_int(engineering["last_processed_position_id"]))}
     </section>
 
+	    <section id="distribution-stability" class="section-title">
+	      <h2>Distribution Stability</h2>
+	      <div class="subtle">Previous {int(stability.get("window_days", 3))} days vs latest {int(stability.get("window_days", 3))} days, ending {escape(str(stability.get("latest_end", "not available")))}.</div>
+	    </section>
+	    <section class="metrics">
+	      {metric("Stable variables", fmt_int(stability.get("stable_count", 0)))}
+	      {metric("Watch variables", fmt_int(stability.get("watch_count", 0)))}
+	      {metric("Moving variables", fmt_int(stability.get("moving_count", 0)))}
+	      {metric("Thin samples", fmt_int(stability.get("thin_count", 0)))}
+	      {metric("Window days", fmt_int(stability.get("window_days", 0)))}
+	    </section>
+	    <section class="panel">
+	      <div class="panel-title">
+	        <h2>Class-Specific Distribution Convergence</h2>
+	        <div class="subtle">Choose an unconventional class and parameter. Histograms and memory update in the browser from the cached snapshot.</div>
+	      </div>
+	      <div class="stability-controls">
+	        <label>Unconventional aircraft class
+	          <select id="stabilityClassSelect"></select>
+	        </label>
+	        <label>Parameter
+	          <select id="stabilityVariableSelect"></select>
+	        </label>
+	      </div>
+	      <div class="chart-grid">
+	        <div class="chart-card">
+	          <div class="chart-title">Latest vs previous histogram</div>
+	          <svg id="stabilityHistogram" viewBox="0 0 720 230" role="img" aria-label="Distribution histogram"></svg>
+	          <div id="stabilityHistogramCaption" class="chart-caption"></div>
+	        </div>
+	        <div class="chart-card">
+	          <div class="chart-title">Rolling three-day divergence memory</div>
+	          <svg id="stabilityTrend" viewBox="0 0 440 230" role="img" aria-label="Distribution stability trend"></svg>
+	          <div id="stabilityTrendCaption" class="chart-caption"></div>
+	        </div>
+	      </div>
+	      <div class="table-wrap">
+	        <table>
+	          <thead><tr><th>Variable</th><th>Source</th><th>Unit</th><th class="num">Prev n</th><th class="num">Latest n</th><th class="num">JSD</th><th class="num">Wasserstein</th><th>Status</th></tr></thead>
+	          <tbody id="stabilityRows">{render_stability_rows(stability.get("variables", []))}</tbody>
+	        </table>
+	      </div>
+	      <div class="note">Each row is now class-specific: for example, glider speed is compared against glider speed only, balloon speed against balloon speed only, and so on. The trend chart shows how the same metric changed across rolling {int(stability.get("window_days", 3))}-day windows kept in the dashboard snapshot.</div>
+	    </section>
+	    <section class="two-col">
+	      <div class="panel">
+	        <h2>Aggregate Stability Context</h2>
+	        <div class="table-wrap">
+	          <table>
+	            <thead><tr><th>Variable</th><th>Source</th><th>Unit</th><th class="num">Prev n</th><th class="num">Latest n</th><th class="num">JSD</th><th class="num">Wasserstein</th><th>Status</th></tr></thead>
+	            <tbody>{render_stability_rows(stability.get("aggregate_variables", []))}</tbody>
+	          </table>
+	        </div>
+	        <div class="note">Spatial density and state transitions are still shown as aggregate context. They are useful coverage and dynamics signals, but the modelling distributions above are split by unconventional aircraft class.</div>
+	      </div>
+	      <div class="panel">
+	        <h2>Aircraft-Type Modelling Volume</h2>
+	        <div class="table-wrap">
+	          <table>
+	            <thead><tr><th>Aircraft type</th><th class="num">Prev seg.</th><th class="num">Latest seg.</th><th class="num">Prev pts</th><th class="num">Latest pts</th><th>Status</th></tr></thead>
+	            <tbody>{render_type_stability_rows(stability.get("type_readiness", []))}</tbody>
+	          </table>
+	        </div>
+	        <div class="note">This table checks whether each unconventional aircraft class has enough recent good segments. It is a volume signal, not yet a full per-class convergence test.</div>
+	      </div>
+	    </section>
+
 	    <section class="two-col">
 	      <div class="panel">
 	        <h2>Processed Segments by Aircraft Type</h2>
@@ -798,6 +973,7 @@ def render_dashboard_html(snapshot: dict[str, object]) -> str:
     const dropoutCandidates = payload.dropoutCandidates;
     const dropoutHotspots = payload.dropoutHotspots;
     const allTimeDropoutHotspots = payload.allTimeDropoutHotspots;
+    const distributionStability = payload.distributionStability || {{}};
     const gridSizeDeg = payload.gridDegrees;
     const switzerlandCenter = [46.8, 8.2];
     const map = L.map("map", {{ scrollWheelZoom: true }}).setView(switzerlandCenter, 7);
@@ -822,6 +998,13 @@ def render_dashboard_html(snapshot: dict[str, object]) -> str:
 	    const visibleHotspotCount = document.getElementById("visibleHotspotCount");
 	    const visibleAllTimeHotspotCount = document.getElementById("visibleAllTimeHotspotCount");
 	    const mapInspector = document.getElementById("mapInspector");
+	    const stabilityClassSelect = document.getElementById("stabilityClassSelect");
+	    const stabilityVariableSelect = document.getElementById("stabilityVariableSelect");
+	    const stabilityRows = document.getElementById("stabilityRows");
+	    const stabilityHistogram = document.getElementById("stabilityHistogram");
+	    const stabilityTrend = document.getElementById("stabilityTrend");
+	    const stabilityHistogramCaption = document.getElementById("stabilityHistogramCaption");
+	    const stabilityTrendCaption = document.getElementById("stabilityTrendCaption");
 	    const maxObservations = Math.max(...densityCells.map(cell => cell.observations), 1);
 	    const maxDropoutGap = Math.max(...dropoutCandidates.map(candidate => candidate.gap_s), 1);
 	    const maxHotspotRate = Math.max(...dropoutHotspots.map(cell => cell.dropout_rate), 0.01);
@@ -1067,10 +1250,170 @@ def render_dashboard_html(snapshot: dict[str, object]) -> str:
       `;
 	    }}
 
+	    function fmtJs(value, digits = 0) {{
+	      if (value === null || value === undefined || Number.isNaN(Number(value))) return "";
+	      return Number(value).toLocaleString(undefined, {{ maximumFractionDigits: digits, minimumFractionDigits: digits }});
+	    }}
+
+	    function stabilityPill(status) {{
+	      const label = status || "unavailable";
+	      const cls = label === "stable" ? "stable" : label === "watch" ? "watch" : label === "moving" ? "moving" : "thin";
+	      return `<span class="status-pill ${{cls}}">${{label}}</span>`;
+	    }}
+
+	    function selectedStabilityClass() {{
+	      const classes = distributionStability.classes || [];
+	      return classes.find(item => String(item.code) === stabilityClassSelect.value) || classes[0] || null;
+	    }}
+
+	    function selectedStabilityVariable(stabilityClass) {{
+	      const variables = stabilityClass ? stabilityClass.variables || [] : [];
+	      return variables.find(item => item.key === stabilityVariableSelect.value) || variables[0] || null;
+	    }}
+
+	    function fillStabilitySelectors() {{
+	      const classes = distributionStability.classes || [];
+	      stabilityClassSelect.innerHTML = "";
+	      for (const item of classes) {{
+	        const option = document.createElement("option");
+	        option.value = item.code;
+	        option.textContent = `${{item.label}} (${{Number(item.observations || 0).toLocaleString()}} pts)`;
+	        stabilityClassSelect.appendChild(option);
+	      }}
+	      fillStabilityVariables();
+	    }}
+
+	    function fillStabilityVariables() {{
+	      const stabilityClass = selectedStabilityClass();
+	      const currentValue = stabilityVariableSelect.value;
+	      stabilityVariableSelect.innerHTML = "";
+	      for (const item of (stabilityClass ? stabilityClass.variables || [] : [])) {{
+	        const option = document.createElement("option");
+	        option.value = item.key;
+	        option.textContent = item.name;
+	        stabilityVariableSelect.appendChild(option);
+	      }}
+	      if ([...stabilityVariableSelect.options].some(option => option.value === currentValue)) {{
+	        stabilityVariableSelect.value = currentValue;
+	      }}
+	    }}
+
+	    function renderStabilityRows() {{
+	      const stabilityClass = selectedStabilityClass();
+	      const variables = stabilityClass ? stabilityClass.variables || [] : [];
+	      if (!variables.length) {{
+	        stabilityRows.innerHTML = '<tr><td colspan="8" class="empty">No class-specific stability data yet.</td></tr>';
+	        return;
+	      }}
+	      stabilityRows.innerHTML = variables.map(item => `
+	        <tr>
+	          <td>${{item.name}}</td>
+	          <td>${{item.source}}</td>
+	          <td>${{item.unit}}</td>
+	          <td class="num">${{fmtJs(item.previous_n, 0)}}</td>
+	          <td class="num">${{fmtJs(item.latest_n, 0)}}</td>
+	          <td class="num">${{fmtJs(item.jensen_shannon, 5)}}</td>
+	          <td class="num">${{item.wasserstein === null ? "" : fmtJs(item.wasserstein, 3)}}</td>
+	          <td>${{stabilityPill(item.status)}}</td>
+	        </tr>
+	      `).join("");
+	    }}
+
+	    function drawStabilityHistogram(variable) {{
+	      stabilityHistogram.innerHTML = "";
+	      if (!variable) {{
+	        stabilityHistogramCaption.textContent = "No histogram available.";
+	        return;
+	      }}
+	      const latest = new Map((variable.latest_bins || []).map(item => [item.bin, item]));
+	      const previous = new Map((variable.previous_bins || []).map(item => [item.bin, item]));
+	      const keys = [...new Set([...latest.keys(), ...previous.keys()])].sort((a, b) => a - b);
+	      if (!keys.length) {{
+	        stabilityHistogramCaption.textContent = "No samples in one or both comparison windows.";
+	        return;
+	      }}
+	      const width = 720;
+	      const height = 230;
+	      const pad = 34;
+	      const chartWidth = width - pad * 2;
+	      const chartHeight = height - pad * 2;
+	      const maxCount = Math.max(...keys.map(key => Math.max(latest.get(key)?.count || 0, previous.get(key)?.count || 0)), 1);
+	      const barStep = chartWidth / keys.length;
+	      const barWidth = Math.max(2, barStep * 0.36);
+	      const bars = [];
+	      for (let index = 0; index < keys.length; index += 1) {{
+	        const key = keys[index];
+	        const x = pad + index * barStep + barStep * 0.12;
+	        const previousHeight = chartHeight * ((previous.get(key)?.count || 0) / maxCount);
+	        const latestHeight = chartHeight * ((latest.get(key)?.count || 0) / maxCount);
+	        bars.push(`<rect x="${{x}}" y="${{height - pad - previousHeight}}" width="${{barWidth}}" height="${{previousHeight}}" fill="#8fa1b3" opacity="0.62"></rect>`);
+	        bars.push(`<rect x="${{x + barWidth}}" y="${{height - pad - latestHeight}}" width="${{barWidth}}" height="${{latestHeight}}" fill="#4ea1ff" opacity="0.88"></rect>`);
+	      }}
+	      stabilityHistogram.innerHTML = `
+	        <line x1="${{pad}}" y1="${{height - pad}}" x2="${{width - pad}}" y2="${{height - pad}}" stroke="#38506a"></line>
+	        <line x1="${{pad}}" y1="${{pad}}" x2="${{pad}}" y2="${{height - pad}}" stroke="#38506a"></line>
+	        ${{bars.join("")}}
+	        <text x="${{pad}}" y="20" fill="#8fa1b3" font-size="12">previous</text>
+	        <rect x="${{pad + 58}}" y="11" width="12" height="8" fill="#8fa1b3" opacity="0.62"></rect>
+	        <text x="${{pad + 86}}" y="20" fill="#8fa1b3" font-size="12">latest</text>
+	        <rect x="${{pad + 127}}" y="11" width="12" height="8" fill="#4ea1ff" opacity="0.88"></rect>
+	      `;
+	      stabilityHistogramCaption.textContent = `${{variable.name}} · previous n=${{fmtJs(variable.previous_n)}} · latest n=${{fmtJs(variable.latest_n)}} · status=${{variable.status}}`;
+	    }}
+
+	    function drawStabilityTrend(variable) {{
+	      stabilityTrend.innerHTML = "";
+	      const history = variable ? variable.history || [] : [];
+	      if (!history.length) {{
+	        stabilityTrendCaption.textContent = "No rolling history available.";
+	        return;
+	      }}
+	      const width = 440;
+	      const height = 230;
+	      const pad = 34;
+	      const chartWidth = width - pad * 2;
+	      const chartHeight = height - pad * 2;
+	      const values = history.map(item => item.jensen_shannon === null ? 0 : Number(item.jensen_shannon));
+	      const maxValue = Math.max(...values, 0.01);
+	      const points = values.map((value, index) => {{
+	        const x = pad + (history.length === 1 ? chartWidth / 2 : index * chartWidth / (history.length - 1));
+	        const y = height - pad - chartHeight * (value / maxValue);
+	        return [x, y, value];
+	      }});
+	      const line = points.map(point => `${{point[0]}},${{point[1]}}`).join(" ");
+	      const dots = points.map((point, index) => `<circle cx="${{point[0]}}" cy="${{point[1]}}" r="4" fill="#4ea1ff"><title>${{history[index].start}} to ${{history[index].end}}: ${{fmtJs(point[2], 5)}}</title></circle>`);
+	      stabilityTrend.innerHTML = `
+	        <line x1="${{pad}}" y1="${{height - pad}}" x2="${{width - pad}}" y2="${{height - pad}}" stroke="#38506a"></line>
+	        <line x1="${{pad}}" y1="${{pad}}" x2="${{pad}}" y2="${{height - pad}}" stroke="#38506a"></line>
+	        <polyline points="${{line}}" fill="none" stroke="#4ea1ff" stroke-width="2.5"></polyline>
+	        ${{dots.join("")}}
+	        <text x="${{pad}}" y="20" fill="#8fa1b3" font-size="12">JSD trend</text>
+	        <text x="${{width - pad - 72}}" y="20" fill="#8fa1b3" font-size="12">max ${{fmtJs(maxValue, 5)}}</text>
+	      `;
+	      stabilityTrendCaption.textContent = `Lower is better. Each dot compares one ${{distributionStability.window_days}}-day window with the previous one.`;
+	    }}
+
+	    function refreshStabilityPanel() {{
+	      fillStabilityVariables();
+	      renderStabilityRows();
+	      const stabilityClass = selectedStabilityClass();
+	      const variable = selectedStabilityVariable(stabilityClass);
+	      drawStabilityHistogram(variable);
+	      drawStabilityTrend(variable);
+	    }}
+
     fillFilter(aircraftTypeFilter, [...new Set(densityCells.map(cell => cell.aircraft_type_name || "unknown"))].sort());
+	    fillStabilitySelectors();
     aircraftTypeFilter.addEventListener("change", drawDensity);
     classFilter.addEventListener("change", drawDensity);
     minObs.addEventListener("input", drawDensity);
+	    stabilityClassSelect.addEventListener("change", refreshStabilityPanel);
+	    stabilityVariableSelect.addEventListener("change", () => {{
+	      const stabilityClass = selectedStabilityClass();
+	      const variable = selectedStabilityVariable(stabilityClass);
+	      drawStabilityHistogram(variable);
+	      drawStabilityTrend(variable);
+	    }});
     dropoutToggle.addEventListener("click", () => {{
       dropoutsVisible = !dropoutsVisible;
       dropoutToggle.classList.toggle("active", dropoutsVisible);
@@ -1101,6 +1444,7 @@ def render_dashboard_html(snapshot: dict[str, object]) -> str:
 	        previewSegment(button.dataset.segmentId, true);
 	      }});
 	    }});
+	    refreshStabilityPanel();
 	    drawDensity();
   </script>
 </body>

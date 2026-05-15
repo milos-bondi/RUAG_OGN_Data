@@ -15,6 +15,146 @@ from src.utils.geo import inside_swiss_bbox, parse_iso_timestamp
 
 
 STATE_KEY = "process_ogn_data.last_position_observation_id"
+POINT_DISTRIBUTIONS = [
+    {
+        "name": "Ground speed",
+        "unit": "km/h",
+        "source": "cleaned points",
+        "from_sql": "cleaned_observations",
+        "type_column": "aircraft_type",
+        "time_column": "timestamp",
+        "value_sql": "ground_speed_kmh",
+        "min_value": 0.0,
+        "max_value": 300.0,
+        "bin_width": 10.0,
+        "min_samples": "points",
+        "extra_where": "AND inside_swiss_bbox = 1 AND is_likely_unconventional = 1",
+    },
+    {
+        "name": "Climb rate",
+        "unit": "m/s",
+        "source": "cleaned points",
+        "from_sql": "cleaned_observations",
+        "type_column": "aircraft_type",
+        "time_column": "timestamp",
+        "value_sql": "climb_rate_ms",
+        "min_value": -10.0,
+        "max_value": 10.0,
+        "bin_width": 0.5,
+        "min_samples": "points",
+        "extra_where": "AND inside_swiss_bbox = 1 AND is_likely_unconventional = 1",
+    },
+    {
+        "name": "Altitude",
+        "unit": "m",
+        "source": "cleaned points",
+        "from_sql": "cleaned_observations",
+        "type_column": "aircraft_type",
+        "time_column": "timestamp",
+        "value_sql": "altitude_m",
+        "min_value": 0.0,
+        "max_value": 6000.0,
+        "bin_width": 250.0,
+        "min_samples": "points",
+        "extra_where": "AND inside_swiss_bbox = 1 AND is_likely_unconventional = 1",
+    },
+    {
+        "name": "Turn rate",
+        "unit": "deg/s",
+        "source": "cleaned points",
+        "from_sql": "cleaned_observations",
+        "type_column": "aircraft_type",
+        "time_column": "timestamp",
+        "value_sql": "turn_rate_degs",
+        "min_value": -90.0,
+        "max_value": 90.0,
+        "bin_width": 5.0,
+        "min_samples": "points",
+        "extra_where": "AND inside_swiss_bbox = 1 AND is_likely_unconventional = 1",
+    },
+]
+SEGMENT_DISTRIBUTIONS = [
+    {
+        "name": "Segment duration",
+        "unit": "s",
+        "source": "good segments",
+        "from_sql": "track_segments",
+        "type_column": "aircraft_type",
+        "time_column": "end_timestamp",
+        "value_sql": "duration_s",
+        "min_value": 120.0,
+        "max_value": 7200.0,
+        "bin_width": 60.0,
+        "min_samples": "segments",
+        "extra_where": "AND is_likely_unconventional = 1 AND n_points >= 20",
+    },
+    {
+        "name": "Segment distance",
+        "unit": "km",
+        "source": "good segments",
+        "from_sql": "track_segments",
+        "type_column": "aircraft_type",
+        "time_column": "end_timestamp",
+        "value_sql": "distance_km",
+        "min_value": 0.0,
+        "max_value": 200.0,
+        "bin_width": 2.0,
+        "min_samples": "segments",
+        "extra_where": "AND is_likely_unconventional = 1 AND n_points >= 20 AND duration_s >= 120",
+    },
+    {
+        "name": "Max inter-point gap",
+        "unit": "s",
+        "source": "good segments",
+        "from_sql": "track_segments",
+        "type_column": "aircraft_type",
+        "time_column": "end_timestamp",
+        "value_sql": "max_gap_s",
+        "min_value": 0.0,
+        "max_value": 120.0,
+        "bin_width": 2.0,
+        "min_samples": "segments",
+        "extra_where": "AND is_likely_unconventional = 1 AND n_points >= 20 AND duration_s >= 120",
+    },
+]
+TRACK_POINT_DISTRIBUTIONS = [
+    {
+        "name": "Inter-point gap",
+        "unit": "s",
+        "source": "track points",
+        "from_sql": """
+            track_points AS tp
+            JOIN track_segments AS ts ON ts.id = tp.segment_id
+            JOIN cleaned_observations AS co ON co.id = tp.cleaned_observation_id
+        """,
+        "type_column": "ts.aircraft_type",
+        "time_column": "co.timestamp",
+        "value_sql": "tp.dt_s",
+        "min_value": 0.0,
+        "max_value": 120.0,
+        "bin_width": 1.0,
+        "min_samples": "points",
+        "extra_where": "AND ts.is_likely_unconventional = 1 AND ts.n_points >= 20 AND ts.duration_s >= 120",
+    },
+    {
+        "name": "Heading",
+        "unit": "deg",
+        "source": "track points",
+        "from_sql": """
+            track_points AS tp
+            JOIN track_segments AS ts ON ts.id = tp.segment_id
+            JOIN cleaned_observations AS co ON co.id = tp.cleaned_observation_id
+        """,
+        "type_column": "ts.aircraft_type",
+        "time_column": "co.timestamp",
+        "value_sql": "tp.estimated_heading_deg",
+        "min_value": 0.0,
+        "max_value": 360.0,
+        "bin_width": 15.0,
+        "min_samples": "points",
+        "extra_where": "AND ts.is_likely_unconventional = 1 AND ts.n_points >= 20 AND ts.duration_s >= 120",
+    },
+]
 
 
 def aircraft_type_name(code: int | None) -> str:
@@ -127,6 +267,601 @@ def top_counter_share(counter: Counter) -> float:
         return 0.0
 
     return counter.most_common(1)[0][1] / total
+
+
+def histogram_total(histogram: dict[object, int]) -> int:
+    """Return the number of samples represented by a histogram."""
+    return sum(histogram.values())
+
+
+def normalized_histogram(histogram: dict[object, int]) -> dict[object, float]:
+    """Return probability mass for every histogram bin."""
+    total = histogram_total(histogram)
+    if not total:
+        return {}
+
+    return {key: value / total for key, value in histogram.items()}
+
+
+def jensen_shannon_divergence(left: dict[object, int], right: dict[object, int]) -> float | None:
+    """Return Jensen-Shannon divergence using log base 2."""
+    left_prob = normalized_histogram(left)
+    right_prob = normalized_histogram(right)
+    keys = set(left_prob) | set(right_prob)
+    if not keys:
+        return None
+
+    divergence = 0.0
+
+    # Compare both distributions against their midpoint distribution.
+    for key in keys:
+        left_value = left_prob.get(key, 0.0)
+        right_value = right_prob.get(key, 0.0)
+        midpoint = (left_value + right_value) / 2.0
+        if left_value > 0.0:
+            divergence += 0.5 * left_value * math.log(left_value / midpoint, 2)
+        if right_value > 0.0:
+            divergence += 0.5 * right_value * math.log(right_value / midpoint, 2)
+
+    return round(divergence, 5)
+
+
+def histogram_wasserstein_distance(
+    left: dict[int, int],
+    right: dict[int, int],
+    bin_width: float,
+) -> float | None:
+    """Return a one-dimensional Wasserstein distance approximation."""
+    left_prob = normalized_histogram(left)
+    right_prob = normalized_histogram(right)
+    keys = sorted(set(left_prob) | set(right_prob))
+    if not keys:
+        return None
+
+    distance = 0.0
+    cdf_delta = 0.0
+
+    # Summing cumulative mass differences over ordered bins approximates EMD.
+    for key in keys:
+        cdf_delta += left_prob.get(key, 0.0) - right_prob.get(key, 0.0)
+        distance += abs(cdf_delta) * bin_width
+
+    return round(distance, 3)
+
+
+def stability_status(
+    divergence: float | None,
+    previous_n: int,
+    latest_n: int,
+    min_samples: int,
+) -> str:
+    """Return a compact stability status for a distribution comparison."""
+    if previous_n < min_samples or latest_n < min_samples:
+        return "thin sample"
+
+    if divergence is None:
+        return "unavailable"
+
+    if divergence <= 0.04:
+        return "stable"
+
+    if divergence <= 0.10:
+        return "watch"
+
+    return "moving"
+
+
+def binned_histogram(
+    session: Session,
+    config: dict[str, object],
+    start: str,
+    end: str,
+) -> dict[int, int]:
+    """Return SQL-binned counts for one continuous variable and time window."""
+    result = rows(
+        session,
+        f"""
+        SELECT
+            CAST(({config["value_sql"]} - :min_value) / :bin_width AS INTEGER) AS bin_id,
+            COUNT(*) AS observations
+        FROM {config["from_sql"]}
+        WHERE {config["time_column"]} >= :start
+          AND {config["time_column"]} < :end
+          AND {config["value_sql"]} IS NOT NULL
+          AND {config["value_sql"]} >= :min_value
+          AND {config["value_sql"]} < :max_value
+          {config["extra_where"]}
+        GROUP BY bin_id
+        """,
+        {
+            "start": start,
+            "end": end,
+            "min_value": config["min_value"],
+            "max_value": config["max_value"],
+            "bin_width": config["bin_width"],
+        },
+    )
+
+    return {int(row[0]): int(row[1]) for row in result}
+
+
+def binned_histograms_by_type(
+    session: Session,
+    config: dict[str, object],
+    start: str,
+    end: str,
+) -> dict[int, dict[int, int]]:
+    """Return SQL-binned counts grouped by aircraft type."""
+    result = rows(
+        session,
+        f"""
+        SELECT
+            {config["type_column"]} AS aircraft_type,
+            CAST(({config["value_sql"]} - :min_value) / :bin_width AS INTEGER) AS bin_id,
+            COUNT(*) AS observations
+        FROM {config["from_sql"]}
+        WHERE {config["time_column"]} >= :start
+          AND {config["time_column"]} < :end
+          AND {config["value_sql"]} IS NOT NULL
+          AND {config["value_sql"]} >= :min_value
+          AND {config["value_sql"]} < :max_value
+          {config["extra_where"]}
+        GROUP BY {config["type_column"]}, bin_id
+        """,
+        {
+            "start": start,
+            "end": end,
+            "min_value": config["min_value"],
+            "max_value": config["max_value"],
+            "bin_width": config["bin_width"],
+        },
+    )
+    histograms = defaultdict(dict)
+
+    # Keep the grouped SQL output compact for client-side charts.
+    for row in result:
+        if row[0] is None:
+            continue
+        histograms[int(row[0])][int(row[1])] = int(row[2])
+
+    return dict(histograms)
+
+
+def histogram_bins(histogram: dict[int, int], config: dict[str, object]) -> list[dict[str, object]]:
+    """Return chart-ready histogram bins."""
+    bin_width = float(config["bin_width"])
+    min_value = float(config["min_value"])
+
+    return [
+        {
+            "bin": key,
+            "label": round(min_value + key * bin_width, 3),
+            "count": value,
+        }
+        for key, value in sorted(histogram.items())
+    ]
+
+
+def compare_distribution(
+    session: Session,
+    config: dict[str, object],
+    previous_start: str,
+    latest_start: str,
+    latest_end: str,
+) -> dict[str, object]:
+    """Return stability metrics for one configured distribution."""
+    previous = binned_histogram(session, config, previous_start, latest_start)
+    latest = binned_histogram(session, config, latest_start, latest_end)
+    previous_n = histogram_total(previous)
+    latest_n = histogram_total(latest)
+    minimum = (
+        env.dashboard_stability_min_segments
+        if config["min_samples"] == "segments"
+        else env.dashboard_stability_min_points
+    )
+    jsd = jensen_shannon_divergence(previous, latest)
+    wasserstein = histogram_wasserstein_distance(previous, latest, float(config["bin_width"]))
+
+    return {
+        "name": config["name"],
+        "unit": config["unit"],
+        "source": config["source"],
+        "previous_n": previous_n,
+        "latest_n": latest_n,
+        "jensen_shannon": jsd,
+        "wasserstein": wasserstein,
+        "status": stability_status(jsd, previous_n, latest_n, minimum),
+    }
+
+
+def compare_precomputed_distribution(
+    config: dict[str, object],
+    previous: dict[int, int],
+    latest: dict[int, int],
+) -> dict[str, object]:
+    """Return stability metrics for precomputed histograms."""
+    previous_n = histogram_total(previous)
+    latest_n = histogram_total(latest)
+    minimum = (
+        env.dashboard_stability_min_segments
+        if config["min_samples"] == "segments"
+        else env.dashboard_stability_min_points
+    )
+    jsd = jensen_shannon_divergence(previous, latest)
+    wasserstein = histogram_wasserstein_distance(previous, latest, float(config["bin_width"]))
+
+    return {
+        "key": str(config["name"]).lower().replace(" ", "_"),
+        "name": config["name"],
+        "unit": config["unit"],
+        "source": config["source"],
+        "previous_n": previous_n,
+        "latest_n": latest_n,
+        "jensen_shannon": jsd,
+        "wasserstein": wasserstein,
+        "status": stability_status(jsd, previous_n, latest_n, minimum),
+        "previous_bins": histogram_bins(previous, config),
+        "latest_bins": histogram_bins(latest, config),
+    }
+
+
+def fetch_spatial_density_stability(
+    session: Session,
+    previous_start: str,
+    latest_start: str,
+    latest_end: str,
+) -> dict[str, object]:
+    """Return stability metrics for spatial density cells."""
+    def spatial_histogram(start: str, end: str) -> dict[str, int]:
+        """Return binned spatial density counts for one time window."""
+        result = rows(
+            session,
+            f"""
+            SELECT
+                CAST(ROUND(latitude / :grid) AS INTEGER) || ':' ||
+                CAST(ROUND(longitude / :grid) AS INTEGER) AS cell_id,
+                COUNT(*) AS observations
+            FROM cleaned_observations
+            WHERE timestamp >= :start
+              AND timestamp < :end
+              AND latitude IS NOT NULL
+              AND longitude IS NOT NULL
+              AND inside_swiss_bbox = 1
+              AND is_likely_unconventional = 1
+              AND {region_sql()}
+            GROUP BY cell_id
+            """,
+            {
+                **region_params(),
+                "start": start,
+                "end": end,
+                "grid": env.dashboard_grid_degrees,
+            },
+        )
+
+        return {str(row[0]): int(row[1]) for row in result}
+
+    previous = spatial_histogram(previous_start, latest_start)
+    latest = spatial_histogram(latest_start, latest_end)
+    previous_n = histogram_total(previous)
+    latest_n = histogram_total(latest)
+    jsd = jensen_shannon_divergence(previous, latest)
+
+    return {
+        "name": "Spatial density",
+        "unit": "grid",
+        "source": "cleaned points",
+        "previous_n": previous_n,
+        "latest_n": latest_n,
+        "jensen_shannon": jsd,
+        "wasserstein": None,
+        "status": stability_status(
+            jsd,
+            previous_n,
+            latest_n,
+            env.dashboard_stability_min_points,
+        ),
+    }
+
+
+def fetch_transition_stability(
+    session: Session,
+    previous_start: str,
+    latest_start: str,
+    latest_end: str,
+) -> dict[str, object]:
+    """Return stability metrics for altitude-speed-turn state transitions."""
+    def transition_histogram(start: str, end: str) -> dict[str, int]:
+        """Return transition counts between coarse motion states."""
+        result = rows(
+            session,
+            f"""
+            WITH states AS (
+                SELECT
+                    aircraft_id,
+                    timestamp,
+                    CASE
+                        WHEN altitude_m < 500 THEN 'low'
+                        WHEN altitude_m < 1500 THEN 'mid'
+                        ELSE 'high'
+                    END AS altitude_state,
+                    CASE
+                        WHEN ground_speed_kmh < 30 THEN 'slow'
+                        WHEN ground_speed_kmh < 120 THEN 'cruise'
+                        ELSE 'fast'
+                    END AS speed_state,
+                    CASE
+                        WHEN ABS(COALESCE(turn_rate_degs, 0)) < 5 THEN 'straight'
+                        WHEN ABS(COALESCE(turn_rate_degs, 0)) < 20 THEN 'turn'
+                        ELSE 'sharp'
+                    END AS turn_state
+                FROM cleaned_observations
+                WHERE timestamp >= :start
+                  AND timestamp < :end
+                  AND aircraft_id IS NOT NULL
+                  AND altitude_m IS NOT NULL
+                  AND ground_speed_kmh IS NOT NULL
+                  AND inside_swiss_bbox = 1
+                  AND is_likely_unconventional = 1
+                  AND {region_sql()}
+            ),
+            transitions AS (
+                SELECT
+                    LAG(altitude_state || '/' || speed_state || '/' || turn_state)
+                        OVER (PARTITION BY aircraft_id ORDER BY timestamp) AS previous_state,
+                    altitude_state || '/' || speed_state || '/' || turn_state AS current_state
+                FROM states
+            )
+            SELECT previous_state || ' -> ' || current_state AS transition_id, COUNT(*)
+            FROM transitions
+            WHERE previous_state IS NOT NULL
+            GROUP BY transition_id
+            """,
+            {**region_params(), "start": start, "end": end},
+        )
+
+        return {str(row[0]): int(row[1]) for row in result}
+
+    previous = transition_histogram(previous_start, latest_start)
+    latest = transition_histogram(latest_start, latest_end)
+    previous_n = histogram_total(previous)
+    latest_n = histogram_total(latest)
+    jsd = jensen_shannon_divergence(previous, latest)
+
+    return {
+        "name": "State transitions",
+        "unit": "prob.",
+        "source": "cleaned points",
+        "previous_n": previous_n,
+        "latest_n": latest_n,
+        "jensen_shannon": jsd,
+        "wasserstein": None,
+        "status": stability_status(
+            jsd,
+            previous_n,
+            latest_n,
+            env.dashboard_stability_min_points,
+        ),
+    }
+
+
+def fetch_type_stability(
+    session: Session,
+    previous_start: str,
+    latest_start: str,
+    latest_end: str,
+) -> list[dict[str, object]]:
+    """Return previous/latest modelling volume by aircraft type."""
+    result = rows(
+        session,
+        """
+        SELECT
+            aircraft_type_name,
+            SUM(CASE WHEN end_timestamp >= :previous_start AND end_timestamp < :latest_start THEN 1 ELSE 0 END),
+            SUM(CASE WHEN end_timestamp >= :latest_start AND end_timestamp < :latest_end THEN 1 ELSE 0 END),
+            SUM(CASE WHEN end_timestamp >= :previous_start AND end_timestamp < :latest_start THEN n_points ELSE 0 END),
+            SUM(CASE WHEN end_timestamp >= :latest_start AND end_timestamp < :latest_end THEN n_points ELSE 0 END)
+        FROM track_segments
+        WHERE is_likely_unconventional = 1
+          AND n_points >= 20
+          AND duration_s >= 120
+          AND end_timestamp >= :previous_start
+          AND end_timestamp < :latest_end
+        GROUP BY aircraft_type_name
+        ORDER BY SUM(n_points) DESC
+        LIMIT 10
+        """,
+        {
+            "previous_start": previous_start,
+            "latest_start": latest_start,
+            "latest_end": latest_end,
+        },
+    )
+
+    return [
+        {
+            "aircraft_type_name": row[0] or "unknown",
+            "previous_segments": int(row[1] or 0),
+            "latest_segments": int(row[2] or 0),
+            "previous_points": int(row[3] or 0),
+            "latest_points": int(row[4] or 0),
+            "status": stability_status(
+                0.0,
+                int(row[1] or 0),
+                int(row[2] or 0),
+                env.dashboard_stability_min_segments,
+            ),
+        }
+        for row in result
+    ]
+
+
+def stability_window_edges(latest_dt: object) -> list[tuple[str, str]]:
+    """Return adjacent stability window boundaries ending at the latest data point."""
+    window_count = max(env.dashboard_stability_history_windows, 2)
+    starts = [
+        latest_dt - timedelta(days=env.dashboard_stability_window_days * index)
+        for index in range(window_count, -1, -1)
+    ]
+
+    return [(starts[index].isoformat(), starts[index + 1].isoformat()) for index in range(window_count)]
+
+
+def fetch_stability_aircraft_types(
+    session: Session,
+    start: str,
+    end: str,
+) -> list[dict[str, object]]:
+    """Return unconventional aircraft classes available for stability checks."""
+    result = rows(
+        session,
+        """
+        SELECT aircraft_type, aircraft_type_name, COUNT(*) AS observations
+        FROM cleaned_observations
+        WHERE timestamp >= :start
+          AND timestamp < :end
+          AND is_likely_unconventional = 1
+          AND aircraft_type IS NOT NULL
+        GROUP BY aircraft_type, aircraft_type_name
+        ORDER BY observations DESC
+        """,
+        {"start": start, "end": end},
+    )
+
+    return [
+        {
+            "code": int(row[0]),
+            "label": row[1] or aircraft_type_name(row[0]),
+            "observations": int(row[2] or 0),
+        }
+        for row in result
+    ]
+
+
+def build_class_distribution_stability(
+    session: Session,
+    windows: list[tuple[str, str]],
+) -> list[dict[str, object]]:
+    """Return per-aircraft-class distribution stability and histogram memory."""
+    configs = POINT_DISTRIBUTIONS + SEGMENT_DISTRIBUTIONS + TRACK_POINT_DISTRIBUTIONS
+    first_start = windows[0][0]
+    latest_end = windows[-1][1]
+    classes = fetch_stability_aircraft_types(session, first_start, latest_end)
+    class_codes = {int(item["code"]) for item in classes}
+    window_histograms = {}
+
+    # Each SQL query groups by aircraft type, so classes do not multiply query count.
+    for config in configs:
+        key = str(config["name"]).lower().replace(" ", "_")
+        window_histograms[key] = [
+            binned_histograms_by_type(session, config, start, end)
+            for start, end in windows
+        ]
+
+    class_results = []
+    for item in classes:
+        code = int(item["code"])
+        variables = []
+        for config in configs:
+            key = str(config["name"]).lower().replace(" ", "_")
+            previous = window_histograms[key][-2].get(code, {})
+            latest = window_histograms[key][-1].get(code, {})
+            variable = compare_precomputed_distribution(config, previous, latest)
+            history = []
+
+            # Store a rolling memory of adjacent-window changes for trend charts.
+            for index in range(1, len(windows)):
+                before = window_histograms[key][index - 1].get(code, {})
+                after = window_histograms[key][index].get(code, {})
+                comparison = compare_precomputed_distribution(config, before, after)
+                history.append(
+                    {
+                        "start": windows[index][0],
+                        "end": windows[index][1],
+                        "previous_n": comparison["previous_n"],
+                        "latest_n": comparison["latest_n"],
+                        "jensen_shannon": comparison["jensen_shannon"],
+                        "wasserstein": comparison["wasserstein"],
+                        "status": comparison["status"],
+                    }
+                )
+
+            variable["history"] = history
+            variables.append(variable)
+
+        counts = Counter(variable["status"] for variable in variables)
+        class_results.append(
+            {
+                "code": code,
+                "label": item["label"],
+                "observations": item["observations"],
+                "stable_count": counts["stable"],
+                "watch_count": counts["watch"],
+                "moving_count": counts["moving"],
+                "thin_count": counts["thin sample"],
+                "variables": variables,
+            }
+        )
+
+    return [item for item in class_results if int(item["code"]) in class_codes]
+
+
+def fetch_distribution_stability(session: Session) -> dict[str, object]:
+    """Return distribution stability metrics for modelling readiness."""
+    if not table_exists(session, "cleaned_observations") or not table_exists(session, "track_segments"):
+        return {"available": False, "variables": [], "type_readiness": []}
+
+    latest = one(
+        session,
+        """
+        SELECT MAX(timestamp)
+        FROM cleaned_observations
+        WHERE timestamp IS NOT NULL
+        """,
+    )
+    latest_dt = parse_iso_timestamp(latest)
+    if not latest_dt:
+        return {"available": False, "variables": [], "type_readiness": []}
+
+    windows = stability_window_edges(latest_dt)
+    previous_start = windows[-2][0]
+    latest_start = windows[-1][0]
+    latest_end = latest_dt.isoformat()
+    classes = build_class_distribution_stability(session, windows)
+    variables = classes[0]["variables"] if classes else []
+
+    # Keep aggregate spatial and transition checks as context beside class-specific variables.
+    aggregate_variables = [
+        fetch_spatial_density_stability(session, previous_start, latest_start, latest_end),
+        fetch_transition_stability(session, previous_start, latest_start, latest_end),
+    ]
+    counts = Counter()
+    for item in classes:
+        counts.update(
+            {
+                "stable": item["stable_count"],
+                "watch": item["watch_count"],
+                "moving": item["moving_count"],
+                "thin sample": item["thin_count"],
+            }
+        )
+
+    return {
+        "available": True,
+        "window_days": env.dashboard_stability_window_days,
+        "history_windows": env.dashboard_stability_history_windows,
+        "previous_start": previous_start,
+        "latest_start": latest_start,
+        "latest_end": latest_end,
+        "stable_count": counts["stable"],
+        "watch_count": counts["watch"],
+        "moving_count": counts["moving"],
+        "thin_count": counts["thin sample"],
+        "variables": variables,
+        "aggregate_variables": aggregate_variables,
+        "classes": classes,
+        "type_readiness": fetch_type_stability(session, previous_start, latest_start, latest_end),
+    }
 
 
 def fetch_summary(session: Session) -> dict[str, int | str | None]:
@@ -858,6 +1593,7 @@ def dashboard_snapshot(session: Session) -> dict[str, object]:
         "quality_tracks": fetch_quality_tracks(session, since),
         "engineering": engineering,
         "best_trajectories": fetch_best_trajectories(session),
+        "distribution_stability": fetch_distribution_stability(session),
         "window_since": since,
         "window_hours": env.dashboard_window_hours,
         "grid_degrees": env.dashboard_grid_degrees,

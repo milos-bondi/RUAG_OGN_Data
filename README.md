@@ -89,6 +89,10 @@ OGN_DASHBOARD_DROPOUT_MAX_GAP_SECONDS=600
 OGN_DASHBOARD_DROPOUT_MAX_IMPLIED_SPEED_KMH=300
 OGN_DASHBOARD_DROPOUT_HOTSPOT_MIN_TRANSITIONS=30
 OGN_DASHBOARD_INCLUDE_ALL_DROPOUT_AIRCRAFT=false
+OGN_DASHBOARD_STABILITY_WINDOW_DAYS=3
+OGN_DASHBOARD_STABILITY_HISTORY_WINDOWS=6
+OGN_DASHBOARD_STABILITY_MIN_POINTS=1000
+OGN_DASHBOARD_STABILITY_MIN_SEGMENTS=100
 OGN_INCLUDE_OUTSIDE_SWISS=false
 OGN_INCLUDE_RECEIVERS=false
 OGN_INCLUDE_STATIC=false
@@ -152,9 +156,9 @@ collection began.
 
 It shows raw and processed counts, Swiss density cells with browser-side
 filters, dropout events and hotspot grid, aircraft type mix, beacon mix, top
-aircraft, raw quality tracks, processed track segments, and ranked
-unconventional trajectories. Click a segment row to inspect its trajectory
-points on demand.
+aircraft, raw quality tracks, processed track segments, class-specific
+distribution stability checks with histograms, and ranked unconventional
+trajectories. Click a segment row to inspect its trajectory points on demand.
 
 ## API Routes
 

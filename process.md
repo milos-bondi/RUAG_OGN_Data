@@ -439,6 +439,102 @@ The `View` buttons are generated automatically from the current best-trajectory 
 
 The best unconventional trajectory ranking is currently all-time. It scans processed `track_segments` globally so strong examples remain visible even if they did not happen in the most recent dashboard window.
 
+## Distribution Stability
+
+The dashboard now includes a first modelling-readiness layer called `Distribution Stability`.
+
+The goal is to answer a practical interview question:
+
+```text
+Is the newest data starting to look like the previous data, or are the distributions still changing a lot?
+```
+
+This matters because the future Bayesian encounter model should not be trained from a dataset that is still very unstable, too small, or strongly biased toward one short collection period.
+
+The current implementation compares two adjacent time windows for each unconventional aircraft class:
+
+1. previous 3 days
+2. latest 3 days
+
+The window length is controlled by:
+
+```text
+OGN_DASHBOARD_STABILITY_WINDOW_DAYS=3
+```
+
+The comparison is always relative to the latest processed timestamp in `cleaned_observations`, not the wall-clock time on the laptop. This means the stability report still makes sense if the collector was paused for a while.
+
+The dashboard also keeps a compact rolling memory of previous windows:
+
+```text
+OGN_DASHBOARD_STABILITY_HISTORY_WINDOWS=6
+```
+
+With the default settings, this means the dashboard can show how each class-specific distribution changed across the latest six three-day windows. The memory is recomputed from the database during each dashboard refresh; it is not stored in a separate table.
+
+The dashboard compares these variables separately for each unconventional class with data, for example glider speed vs previous glider speed, motor glider speed vs previous motor glider speed, and balloon speed vs previous balloon speed:
+
+| Variable | Source table | Meaning |
+| --- | --- | --- |
+| ground speed | `cleaned_observations` | Speed reported or derived for each cleaned point. |
+| climb rate | `cleaned_observations` | Vertical speed for each cleaned point where available. |
+| altitude | `cleaned_observations` | Altitude distribution of kept observations. |
+| turn rate | `cleaned_observations` | Estimated heading-change rate where available. |
+| segment duration | `track_segments` | Duration of good trajectory segments. |
+| segment distance | `track_segments` | Distance covered by good trajectory segments. |
+| max inter-point gap | `track_segments` | Worst sampling gap inside each good segment. |
+| inter-point gap | `track_points` | Time between consecutive points in a segment. |
+| heading | `track_points` | Estimated heading distribution. This is a proxy for directionality, not yet heading-change convergence. |
+| spatial density | `cleaned_observations` | Aggregate geographic grid-cell distribution of likely unconventional traffic. |
+| state transitions | `cleaned_observations` | Aggregate coarse transition probabilities between altitude, speed, and turn states. |
+
+For speed, the implementation does not load all points into Python. It asks SQLite for fixed-bin histograms grouped by aircraft type and then compares those compact histograms in memory. This is why the dashboard can split the distributions by class without becoming one query per class.
+
+The main metric is Jensen-Shannon divergence, shown as `JSD` in the dashboard. It compares the shape of two binned probability distributions:
+
+- lower `JSD` means the latest window looks more like the previous window
+- higher `JSD` means the latest window is different
+- `JSD` is symmetric, so previous-vs-latest and latest-vs-previous give the same result
+
+For ordered continuous variables, the dashboard also shows a histogram-based Wasserstein distance. This is an approximate earth-mover distance over the bins:
+
+- lower Wasserstein means less shift in the variable scale
+- the unit follows the variable, for example km/h for speed or meters for altitude
+- spatial density and state transitions do not show Wasserstein because their bins are categorical
+
+The dashboard includes two graphical views:
+
+- a histogram comparing the latest window against the previous window for the selected class and parameter
+- a rolling divergence chart showing how the selected distribution changed over the stored three-day windows
+
+Each variable receives a compact status:
+
+| Status | Meaning |
+| --- | --- |
+| `stable` | Enough samples exist and the latest distribution is close to the previous one. |
+| `watch` | Enough samples exist, but there is still moderate movement. |
+| `moving` | Enough samples exist and the latest distribution is clearly different. |
+| `thin sample` | One or both windows do not yet have enough points or segments for a confident comparison. |
+
+The minimum sample thresholds are:
+
+```text
+OGN_DASHBOARD_STABILITY_MIN_POINTS=1000
+OGN_DASHBOARD_STABILITY_MIN_SEGMENTS=100
+```
+
+The `Aircraft-Type Modelling Volume` table is related but simpler. It compares how many good segments and points each likely unconventional aircraft type has in the previous and latest windows. This table tells us whether a class has enough recent data to begin modelling.
+
+This is intentionally a first professional step, not the final statistical validation. The next upgrades would be:
+
+- compare previous N trajectories vs latest N trajectories
+- compare bootstrap sample A vs bootstrap sample B
+- add confidence intervals around each metric
+- add deeper per-aircraft-type transition and spatial-density convergence checks
+- add posterior predictive checks after the Bayesian neural network exists
+
+For the interview, the important point is that the pipeline is now moving beyond "we collected points" toward "we can reason about whether the collected distributions are becoming stable enough for modelling."
+
 ## Dashboard Snapshot Queries
 
 The dashboard query layer is in:
@@ -461,6 +557,7 @@ The snapshot includes:
 - `fetch_best_trajectories()`: ranked unconventional trajectory candidates
 - `fetch_dropout_candidates()`: individual dropout-like gaps
 - `fetch_dropout_hotspots()`: aggregate dropout grid cells with receiver, aircraft, altitude, gap, and bias-hint fields
+- `fetch_distribution_stability()`: previous-window vs latest-window distribution convergence metrics
 
 Most map-facing dashboard queries use the recent `OGN_DASHBOARD_WINDOW_HOURS` window. This keeps the dashboard responsive on a large historical SQLite database. The main status totals, best unconventional trajectories, and all-time dropout grid remain all-time.
 

@@ -34,6 +34,10 @@ class Settings(BaseSettings):
     dashboard_dropout_max_implied_speed_kmh: float = 300.0
     dashboard_dropout_hotspot_min_transitions: int = 30
     dashboard_include_all_dropout_aircraft: bool = False
+    dashboard_stability_window_days: int = 3
+    dashboard_stability_history_windows: int = 6
+    dashboard_stability_min_points: int = 1000
+    dashboard_stability_min_segments: int = 100
     include_outside_swiss: bool = False
     include_receivers: bool = False
     include_static: bool = False
